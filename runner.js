@@ -492,7 +492,7 @@ window.openComm = (n, planId, mode, k) => {
     <p class="mut" style="margin:0">Point de correction de la semaine : <b style="color:var(--fg)">${esc(focus)}</b></p>
     <div><span class="chip">Livre p. ${c.bookPages[0]}–${c.bookPages[1]}</span><span class="chip">${c.level}</span>${chap}${tex}${voc}<a class="chip" target="_blank" rel="noopener" href="${FI_BASE}${String(c.fiChapter).padStart(2, "0")}/">FI ch. ${String(c.fiChapter).padStart(2, "0")}</a></div>
     ${sitTabs}
-    <div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre (${esc(audioSrc)}) — à écouter en lisant votre livre :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''"></audio></div>
+    <div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre (${esc(audioSrc)}) — à écouter en lisant votre livre :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''" onerror="window.bookAudioFallback&&bookAudioFallback(this,'${audioSrc}')"></audio></div>
     <p class="mut" style="margin:0;font-size:14px">Ce dialogue est une version réécrite pour le jeu de rôle ; le texte original est dans votre livre.</p></div>`;
   dialoguePage({ n, k, sub: `Communication ${n} · ${c.title} · ${c.dlgs[k].sit}`, subBase: `Communication ${n} · ${c.title}`, info, lines: c.dlgs[k].lines, ex: c.ex, pages: c.bookPages.join("–"), mode: mode || "listen" });
   DP.sit = k;

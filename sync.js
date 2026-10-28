@@ -70,7 +70,47 @@ window.syncOn = async () => {
   await syncNow(); go("sync");
 };
 window.syncOff = () => { ["fr-gist-token", "fr-gist-id", "fr-gist-last"].forEach(k => localStorage.removeItem(k)); SY.token = SY.id = null; SY.last = 0; go("sync"); };
+
+// ---- your own book recordings: not in the public site; read from your PRIVATE repo with a read-only audio token ----
+const AUDIO_REPO = "cyber-hbliu/francais-audio", AUDIO_CACHE = "fr-book-audio";
+const audioTok = () => { try { return localStorage.getItem("fr-audio-token"); } catch (e) { return null; } };
+window.bookAudioFallback = async (el, path) => {
+  el.onerror = null;
+  const t = audioTok(), file = path.split("/").pop(); if (!t) return;
+  try {
+    const cache = window.caches ? await caches.open(AUDIO_CACHE) : null, key = "https://audio.local/" + file;
+    let r = cache && await cache.match(key);
+    if (!r) {
+      r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/${file}`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github.raw" } });
+      if (!r.ok) return; // this act has no recording yet
+      if (cache) { await cache.put(key, r.clone()); }
+    }
+    el.src = URL.createObjectURL(await r.blob()); // downloaded once per device, then played offline
+  } catch (e) { }
+};
+async function audioCheck() {
+  const el = document.getElementById("audst"); if (!el) return;
+  const t = audioTok(); if (!t) { el.textContent = "Pas de jeton audio sur cet appareil."; return; }
+  try {
+    const r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github+json" } });
+    if (!r.ok) throw new Error(r.status === 404 ? "dépôt introuvable (lancez publier-audio.sh, et donnez au jeton l'accès à francais-audio)" : "GitHub " + r.status);
+    const n = (await r.json()).filter(f => /\.mp3$/i.test(f.name)).length;
+    el.innerHTML = `✓ Accès au dépôt privé : ${n} fichier${n > 1 ? "s" : ""} audio.`;
+  } catch (e) { el.innerHTML = `<span class="badc">Erreur : ${esc(e.message)}</span>`; }
+}
+function audioCard() {
+  return `<div class="card" id="audcard"><h2>Audio du livre (dépôt privé)</h2>
+   <p class="mut" style="margin-top:0">Vos enregistrements du livre sont dans le dépôt <b>privé</b> ${AUDIO_REPO}, jamais sur le site public. Chaque appareil les télécharge une fois, puis les garde.</p>
+   <p id="audst" style="font-weight:600"></p>
+   ${audioTok() ? `<div class="row"><button class="b s" onclick="audioOff()">Retirer le jeton audio</button></div>`
+    : `<ol style="margin:8px 0 12px;padding-left:20px"><li>Créez un jeton « fine-grained » : <a target="_blank" rel="noopener" href="https://github.com/settings/personal-access-tokens/new">ouvrir la page GitHub</a>. Repository access : <b>Only select repositories</b> → francais-audio. Permissions → Contents : <b>Read-only</b>.</li>
+       <li>Collez-le ici, sur chaque appareil (une seule fois).</li></ol>
+      <div class="row"><input type="password" id="atok" placeholder="github_pat_…" autocomplete="off" style="flex:1;min-width:220px"><button class="b" onclick="audioOn()">Connecter</button></div>`}</div>`;
+}
+window.audioOn = () => { const v = (document.getElementById("atok").value || "").trim(); if (!v) return; localStorage.setItem("fr-audio-token", v); go("sync"); };
+window.audioOff = async () => { localStorage.removeItem("fr-audio-token"); if (window.caches) await caches.delete(AUDIO_CACHE); go("sync"); };
+
 const origRenderSync = renderSync;
-renderSync = function () { origRenderSync(); view.insertAdjacentHTML("afterbegin", syncCard()); drawSyncStatus(); };
+renderSync = function () { origRenderSync(); view.insertAdjacentHTML("afterbegin", syncCard() + audioCard()); drawSyncStatus(); audioCheck(); };
 
 if (SY.token) syncNow();
