@@ -1,0 +1,5 @@
+# personal recordings of the textbooks (private, never published)
+audio/comm/
+# local tooling
+.claude/
+.DS_Store
