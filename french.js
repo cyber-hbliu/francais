@@ -140,8 +140,9 @@ window.openConj = () => {
 function dicteePool() {
   const out = [];
   LESSONS.filter(l => reachedLesson(l.n)).forEach(l => l.examples.forEach(e => out.push(plain(e[0]))));
+  // only text from your book entries (and the survival kit)
   if (reachedVocab(0)) SURVIVAL.filter(s => !/…|\//.test(s.fr)).forEach(s => out.push(s.fr));
-  COMM.filter(c => reachedComm(c.n)).forEach(c => c.dlg.forEach(d => out.push(d[1])));
+  COMM.filter(c => reachedComm(c.n)).forEach(c => c.dlgs.forEach(d => d.lines.forEach(l => out.push(l.text))));
   return out;
 }
 const toks = s => s.replace(/[«»"!?.,;:—–()]/g, " ").replace(/[’]/g, "'").split(/\s+/).filter(Boolean);
@@ -434,37 +435,22 @@ function renderMethod() {
 window.renderMethod = renderMethod;
 
 // ---------- Communication progressive: units, dialogues, role plays ----------
-function speakDialogue(lines) { // two different French voices when available
+function speakDialogue(lines) { // two different French voices: the first role that speaks, and the others
   if (!("speechSynthesis" in window)) return;
   speechSynthesis.cancel(); player.pause();
   const vs = frVoices().filter(v => !/grandma|grandpa|rocko|eddy|flo|sandy|shelley|reed/i.test(v.name)), a = bestVoice(), b = vs.find(v => v !== a) || a;
-  lines.forEach(([who, t]) => { const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = S.settings.rate || 0.85; const v = who === "A" ? a : b; if (v) u.voice = v; speechSynthesis.speak(u); });
+  const first = lines.length ? lines[0].who : "";
+  lines.forEach(({ who, text }) => { const u = new SpeechSynthesisUtterance(text); u.lang = "fr-FR"; u.rate = S.settings.rate || 0.85; const v = who === first ? a : b; if (v) u.voice = v; speechSynthesis.speak(u); });
 }
-window.playDlg = n => speakDialogue(COMM.find(c => c.n === n).dlg);
+window.playDlg = (n, k) => speakDialogue(COMM.find(c => c.n === n).dlgs[k || 0].lines);
 const commDone = n => S.todo["comm:" + n] && S.todo["comm:" + n].done;
 function renderComm() {
-  view.innerHTML = `<div class="card"><h2>Communication — 40 actes de parole</h2><p class="mut">Ordre de Communication progressive du français (niveau débutant), 6 parties. Chaque unité : expressions utiles (en cartes), un dialogue modèle à écouter et imiter, un jeu de rôle. Les « Révisions » de fin de partie sont un ajout de l'application.</p></div>` +
+  view.innerHTML = `<div class="card"><h2>Communication — 40 actes de parole</h2><p class="mut">Ordre de Communication progressive du français (niveau débutant), 6 parties. Chaque situation : le dialogue du livre et son enregistrement, les « Manières de dire » (en cartes), l'activité du livre. Le contenu vient de votre saisie du livre. Les « Révisions » de fin de partie sont un ajout de l'application.</p></div>` +
     COMM_PARTS.map(([part, a, b], i) => `<div class="card"><h3>${esc(part)}</h3>${COMM.filter(c => c.n >= a && c.n <= b).map(c =>
-      `<div class="todo"><div style="flex:1">${commDone(c.n) ? "✅" : ""} <b>${c.n}.</b> <a href="#" onclick="openComm(${c.n});return false">${esc(c.title)}</a> ${c.level === "A2" ? '<span class="tag">A2</span>' : ""}<span class="mut">${esc(c.sit)} · ${c.dlgs.length} dialogue${c.dlgs.length > 1 ? "s" : ""}</span></div></div>`).join("")}
+      `<div class="todo"><div style="flex:1">${commDone(c.n) ? "✅" : ""} <b>${c.n}.</b> <a href="#" onclick="openComm(${c.n});return false">${esc(c.title)}</a> ${c.level === "A2" ? '<span class="tag">A2</span>' : ""}${aSaisir("comm", c.n)} <span class="mut">p. ${c.bookPages[0]}–${c.bookPages[1]} · ${esc(c.sit)}</span></div></div>`).join("")}
       <div class="todo"><div style="flex:1">📝 <a href="#" onclick="openCommBilan(${i});return false"><b>Révision de la partie ${i + 1}</b></a> <span class="mut">unités ${a}–${b}</span></div></div></div>`).join("");
 }
 window.renderComm = renderComm;
-window.openComm = (n, planId) => {
-  setView("comm", "output");
-  const c = COMM.find(x => x.n === n), pid = planId || "comm:" + n; track("comm", "Communication " + n);
-  view.innerHTML = `<p><a href="#" onclick="go('comm');return false">← Communication</a></p>
-  <div class="card"><span class="tag">Acte ${n}</span><span class="tag">${esc(COMM_PARTS.find(p => n >= p[1] && n <= p[2])[0])}</span>${c.level === "A2" ? '<span class="tag">A2</span>' : ""}<h2>${esc(c.title)}</h2><p><b>Situation :</b> ${esc(c.sit)}</p><p>${esc(c.goal)}</p></div>
-  <div class="card"><h3>1. Expressions utiles</h3><table>${c.ex.map(([fr, en]) => `<tr><td>${spk(fr)}</td><td><b>${esc(fr)}</b></td><td class="mut">${esc(en)}</td></tr>`).join("")}</table>
-   <p class="mut">Apprenez-les comme des blocs entiers, à voix haute.</p><p><button class="b s" onclick="startReview('unit:c${n}')">Réviser ces expressions (cartes)</button></p></div>
-  <div class="card"><h3>2. Dialogue modèle</h3><p><button class="b" onclick="playDlg(${n})">▶ Écouter le dialogue</button> <button class="b s" id="dh">🙈 Cacher le texte</button></p>
-   <div id="dt">${c.dlg.map(([who, t]) => `<p style="margin:6px 0"><span class="tag">${who}</span> ${spk(t)} ${esc(t)}</p>`).join("")}</div>
-   <p class="mut">Écoutez, répétez chaque réplique (shadowing), puis cachez le texte et rejouez le dialogue de mémoire.</p></div>
-  <div class="card"><h3>3. Jeu de rôle</h3><p><b>${esc(c.task)}</b></p>
-   <p class="mut">Jouez la scène à voix haute (les deux rôles si vous êtes seul·e). Notez ce qui vous a manqué, puis rejouez-la tout de suite — <b>3 fois</b>, et encore dans quelques jours. Enregistrez-vous pour vous réécouter.</p>
-   <p>${recWidget("crec")}</p></div>
-  <p class="row"><button class="b ok" onclick="toggleTodo('${pid}',true);(S.talks=S.talks||[]).push({t:Date.now(),kind:'comm'});save();go('today')">✓ Unité terminée</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Unité suivante →</button>` : ""}</p>`;
-  $("#dh").onclick = () => { const t = $("#dt"); t.style.filter = t.style.filter ? "" : "blur(6px)"; };
-};
 window.openCommBilan = (i, planId) => {
   setView("comm", "output");
   const [part, a, b] = COMM_PARTS[i], units = COMM.filter(c => c.n >= a && c.n <= b), pid = planId || "cbilan:" + i;
@@ -473,7 +459,7 @@ window.openCommBilan = (i, planId) => {
   view.innerHTML = `<p><a href="#" onclick="go('comm');return false">← Communication</a></p><div class="card"><h2>Révision de la partie ${i + 1} · ${esc(part)}</h2>
    <p>1) Révisez 25 expressions de la partie, mélangées. 2) Rejouez 3 jeux de rôle tirés au hasard, sans regarder les dialogues.</p>
    <p><button class="b" onclick="startReview('ids:${ids.join(",")}')">▶ Réviser 25 expressions</button></p>
-   <h3>Jeux de rôle</h3><ol>${shuffle(units.slice()).slice(0, 3).map(c => `<li><b>${esc(c.title)}</b> — ${esc(c.task)} <a href="#" onclick="openComm(${c.n});return false">(revoir l'unité)</a></li>`).join("")}</ol>
+   <h3>Jeux de rôle</h3><ol>${shuffle(units.slice()).slice(0, 3).map(c => `<li><b>${esc(c.title)}</b> — ${esc(c.task || "Rejouez le dialogue du livre")} <a href="#" onclick="openComm(${c.n});return false">(revoir l'unité)</a></li>`).join("")}</ol>
    <p>${recWidget("brec")}</p>
    <p><button class="b ok" onclick="toggleTodo('${pid}',true);go('today')">✓ Révision terminée</button></p></div>`;
 };

@@ -7,7 +7,7 @@ REPO="cyber-hbliu/francais-audio"
 cd "$(dirname "$0")/audio/comm"
 if [ ! -d .git ]; then
   git init -q -b main
-  printf 'Enregistrements personnels du livre (dépôt privé).\nNoms : 03.mp3 (acte 3) ou 05-1.mp3 (acte 5, situation 1).\n' > LISEZMOI.txt
+  printf 'Enregistrements personnels du livre (dépôt privé).\nNoms : numéro de piste du CD, sur deux chiffres (04.mp3 = piste 4).\n' > LISEZMOI.txt
 fi
 git add -A
 git commit -qm "Audio du livre $(date +%F)" || echo "Rien de nouveau à envoyer."

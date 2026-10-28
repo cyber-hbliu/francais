@@ -173,7 +173,7 @@ function renderToday() {
   const pend = pr.done ? `${pr.phase} terminé` : dayShort(pr.date);
   const lesson = T < cal().w1 && !c ? "" : `<section class="card" aria-label="Leçon du jour" style="display:flex;flex-wrap:wrap;gap:32px">
     <div style="flex:999 1 420px;min-width:0;display:flex;flex-direction:column;gap:10px"><h2 style="margin:0">Leçon du jour · Communication ${n} · ${esc(c.title)}</h2>
-     ${c.dlgs[k2].lines.slice(0, 3).map(l => `<p style="margin:0"><span style="display:inline-block;min-width:28px;font-weight:600;color:var(--mut)">${l.who}</span>${esc(l.text)}</p>`).join("")}</div>
+     ${c.dlgs[k2].lines.length ? c.dlgs[k2].lines.slice(0, 3).map(l => `<p style="margin:0"><span style="font-weight:600;color:var(--mut)">${esc(l.who)} : </span>${esc(l.text)}</p>`).join("") : `<p style="margin:0">${esc(c.dlgs[k2].sit)} · livre p. ${c.dlgs[k2].page} <span class="tag">à saisir</span></p><div>${saisieBtn("comm", n)}</div>`}</div>
     <div style="flex:1 1 240px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;color:var(--mut)">Liée à cette leçon</div>
      <div><span class="chip">Livre p. ${c.bookPages[0]}${c.bookPages[1] !== c.bookPages[0] ? "–" + c.bookPages[1] : ""}</span>${c.grammar.length ? `<span class="chip">Grammaire ${c.grammar.join(" · ")}</span>` : ""}${c.vocabUnits.length ? `<span class="chip">Vocabulaire ${c.vocabUnits.join(" · ")}</span>` : ""}<span class="chip">FI ch. ${String(c.fiChapter).padStart(2, "0")}</span></div></div></section>`;
   view.innerHTML = (sundayExport ? `<div class="card" style="padding:16px 24px">💾 Dimanche : pensez à exporter votre sauvegarde. <button class="b s" onclick="go('sync')">Exporter</button></div>` : "") +
@@ -289,13 +289,14 @@ function chunked(lines) {
   const out = [];
   lines.forEach(l => {
     const parts = l.text.split(/(?<=[,;:?!.…])\s+/).flatMap(p => { const w = p.split(/\s+/); if (w.length <= 5) return [p]; const h = Math.ceil(w.length / 2); return [w.slice(0, h).join(" "), w.slice(h).join(" ")]; });
-    parts.forEach((p, i) => out.push({ who: l.who, text: p, en: i === 0 ? l.en : "" }));
+    parts.forEach((p, i) => out.push({ who: l.who, ab: l.ab, text: p, en: i === 0 ? l.en : "" }));
   });
   return out;
 }
 const FOCI = [["finales", "Finales muettes"], ["liaison", "Liaisons"], ["nasales", "Voyelles nasales"], ["yu", "/y/ et /u/"], ["intonation", "Intonation"]];
 let DP = null; // the open dialogue page
-const enOf = t => (window.DLG_EN || {})[t] || "";
+// the book's roles (« Le marchand », « La cliente »…): the first one to speak is A, the others B
+const withAB = lines => { const first = lines.length ? lines[0].who : ""; return lines.map(l => Object.assign({}, l, { ab: l.who === first ? "A" : "B" })); };
 function lineHTML(l, i) {
   const cur = DP.cur === i, cover = DP.coverIdx && DP.coverIdx.has(i);
   return `<div class="ln ${cur ? "cur" : ""} ${cover ? "covered" : ""}" data-i="${i}">
@@ -358,10 +359,10 @@ window.dpMode = (mode, keep) => {
   drawLines();
 };
 function dialoguePage(o) { // o: {n, k, title, sub, info, lines, ex, pages, modes, mode}
-  const full = o.lines.map(l => ({ who: l.who, text: l.text, en: l.en || enOf(l.text) }));
+  const full = withAB(o.lines.map(l => ({ who: l.who, text: l.text, en: l.en || "" })));
   DP = { n: o.n, k: o.k, full, chunks: chunked(full), lines: full, ex: o.ex, pages: o.pages, rate: 1, subBase: o.subBase || o.sub, mode: null, plays: 0, passage: 1, focus: 0, tr: true, trUser: false,
     titleFor: m => `<h1>${esc(m === "listen" ? "Écoute du dialogue" : m === "shadow" ? "Répétition phrase par phrase" : m === "role" ? "Jeu de rôle" : m === "retell" ? blkName("retell") : "Phrases en cartes")}</h1><p class="sub" id="dpsub">${esc(o.sub)}</p>` };
-  const modes = o.modes || [["listen", "Écouter"], ["shadow", "Répéter"], ["role", "Jouer B"], ["retell", "Raconter"], ["phrases", "Phrases"]];
+  const modes = o.modes || [["listen", "Écouter"], ["shadow", "Répéter"], ["role", "Jeu de rôle"], ["retell", "Raconter"], ["phrases", "Phrases"]];
   view.innerHTML = `<div id="dptitle" style="display:flex;flex-direction:column;gap:4px"></div>${o.info || ""}
     <div class="row dpt-row">${modes.map(([m, l]) => `<button type="button" class="pill dpt" data-m="${m}" onclick="dpMode('${m}')">${l}</button>`).join("")}</div>
     <div id="dpbody" style="display:flex;flex-direction:column;gap:20px"></div>`;
@@ -373,7 +374,7 @@ window.dpStop = () => { if (DP) DP.tok = null; speechSynthesis.cancel(); };
 function setupListen() {
   const playFrom = async i => {
     const tok = DP.tok = Math.random(); speechSynthesis.cancel(); $("#lplay").innerHTML = `${ICON.pause}<span>Pause</span>`;
-    for (let j = i; j < DP.lines.length; j++) { if (DP.tok !== tok) return; DP.cur = j; drawLines(); await sayP(DP.lines[j].text, DP.lines[j].who, DP.rate); }
+    for (let j = i; j < DP.lines.length; j++) { if (DP.tok !== tok) return; DP.cur = j; drawLines(); await sayP(DP.lines[j].text, DP.lines[j].ab, DP.rate); }
     if (DP.tok !== tok) return;
     DP.tok = null; DP.cur = -1; DP.plays++; $("#lplay").innerHTML = `${ICON.play}<span>Réécouter</span>`;
     if (!DP.trUser && DP.plays === 1) { DP.tr = false; const b = $("#trb"); if (b) b.textContent = "Afficher la traduction"; }
@@ -395,13 +396,13 @@ function setupShadow() {
   const one = async () => {
     if (DP.passage === 3) DP.coverIdx = new Set(DP.lines.map((_, j) => j)); else DP.coverIdx = null;
     const l = DP.lines[DP.cur]; step = 0; drawLines();
-    await sayP(l.text, l.who, p.rate);
+    await sayP(l.text, l.ab, p.rate);
     let r = null;
     try { step = 1; recSecs = 0; drawLines(); r = await recordTurn({ maxMs: 4000 + l.text.length * 150, onTick: ms => { const s = Math.floor(ms / 1000); if (s !== recSecs) { recSecs = s; drawLines(); } } }); }
     catch (e) { step = 5; drawLines(); $("#dpl .ln.cur .status").textContent = "Micro indisponible : répétez à voix haute, puis ↵"; return; }
-    lastUrl = r.url; step = 2; drawLines(); await sayP(l.text, l.who, p.rate);
+    lastUrl = r.url; step = 2; drawLines(); await sayP(l.text, l.ab, p.rate);
     step = 3; drawLines(); await playURL(r.url);
-    step = 4; drawLines(); await sayP(l.text, l.who, p.rate);
+    step = 4; drawLines(); await sayP(l.text, l.ab, p.rate);
     step = 5; drawLines(); keepRec(r, "shadow", DP.n, { focus: FOCI[DP.focus][0], line: DP.cur, passage: DP.passage });
     if (RUN_STATS) RUN_STATS.sent++;
   };
@@ -412,21 +413,22 @@ function setupShadow() {
   };
   DP.onMic = () => { if (TURN_STOP) TURN_STOP(); else if (step === -1 || step === 5) one(); };
   DP.onLine = i => { DP.cur = i; step = -1; one(); };
-  DP.keys = { enter: next, right: next, r: () => { if (TURN_STOP) TURN_STOP(); else one(); }, left: () => { DP.cur = Math.max(0, DP.cur - 1); step = -1; drawLines(); }, space: () => { const l = DP.lines[DP.cur]; if (l) sayP(l.text, l.who, p.rate); } };
+  DP.keys = { enter: next, right: next, r: () => { if (TURN_STOP) TURN_STOP(); else one(); }, left: () => { DP.cur = Math.max(0, DP.cur - 1); step = -1; drawLines(); }, space: () => { const l = DP.lines[DP.cur]; if (l) sayP(l.text, l.ab, p.rate); } };
   sub();
 }
 // role play: the computer reads the other part; you speak yours (covered or visible depending on the phase)
 function setupRole() {
   const p = phase(); let round = 1, waiting = false, recSecs = 0;
-  const head = () => { const me = round === 2 ? "A" : "B"; $("#rhead").textContent = `Tour ${round} sur 3 · vous jouez ${me}`; $("#rhint").textContent = p.cover(round) ? "Vos répliques sont cachées : parlez de mémoire, le texte apparaît quand vous avez fini." : "Vos répliques sont visibles : lisez-les à voix haute, en regardant le moins possible."; };
+  const nameOf = ab => (DP.full.find(l => l.ab === ab) || {}).who || ab;
+  const head = () => { const me = round === 2 ? "A" : "B"; $("#rhead").textContent = `Tour ${round} sur 3 · vous jouez ${nameOf(me)}`; $("#rhint").textContent = p.cover(round) ? "Vos répliques sont cachées : parlez de mémoire, le texte apparaît quand vous avez fini." : "Vos répliques sont visibles : lisez-les à voix haute, en regardant le moins possible."; };
   DP.ctl = () => waiting ? `<span class="status">À vous… ${recSecs ? mmss(recSecs) : ""}</span>${micBtn(true, "J'ai fini")}` : "";
   const go1 = async () => {
-    const me = round === 2 ? "A" : "B", mine = l => me === "B" ? l.who === "B" : l.who !== "B";
+    const me = round === 2 ? "A" : "B", mine = l => l.ab === me;
     head(); $("#rgo").disabled = true; $("#rnote").innerHTML = "";
     DP.coverIdx = new Set(p.cover(round) ? DP.lines.map((l, i) => mine(l) ? i : -1).filter(i => i >= 0) : []);
     for (let i = 0; i < DP.lines.length; i++) {
       const l = DP.lines[i]; DP.cur = i; drawLines();
-      if (!mine(l)) { await sayP(l.text, l.who, p.rate); continue; }
+      if (!mine(l)) { await sayP(l.text, l.ab, p.rate); continue; }
       waiting = true; recSecs = 0; drawLines();
       try { const r = await recordTurn({ maxMs: 5000 + l.text.length * 180, onTick: ms => { const s = Math.floor(ms / 1000); if (s !== recSecs) { recSecs = s; drawLines(); } } }); keepRec(r, "role", DP.n, { round, line: i }); }
       catch (e) { await new Promise(res => setTimeout(res, 2500 + l.text.length * 80)); }
@@ -435,7 +437,7 @@ function setupRole() {
     DP.cur = -1; drawLines(); if (RUN_STATS) RUN_STATS.rounds++;
     $("#rnote").innerHTML = `<div class="card" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px"><b>Tour ${round} fini. Une chose à améliorer au prochain tour :</b><input type="text" id="rimp" placeholder="ex. : dire « je voudrais » plus vite"></div>`;
     const prev = (S.roleNotes || {})[DP.n]; if (prev && prev.length) $("#rnote").insertAdjacentHTML("beforeend", `<p class="mut">Vos notes : ${prev.slice(-3).map(x => "« " + esc(x.v) + " »").join(" · ")}</p>`);
-    $("#rgo").disabled = false; $("#rgo").innerHTML = round < 3 ? `${ICON.play}<span>Tour ${round + 1} · vous jouez ${round === 1 ? "A" : "B"}</span>` : `<span>✓ Trois tours faits</span>`;
+    $("#rgo").disabled = false; $("#rgo").innerHTML = round < 3 ? `${ICON.play}<span>Tour ${round + 1} · vous jouez ${nameOf(round === 1 ? "A" : "B")}</span>` : `<span>✓ Trois tours faits</span>`;
     $("#rgo").onclick = () => {
       const v = ($("#rimp") || {}).value; if (v && v.trim()) { S.roleNotes = S.roleNotes || {}; (S.roleNotes[DP.n] = S.roleNotes[DP.n] || []).push({ t: Date.now(), round, v: v.trim() }); save(); }
       if (round < 3) { round++; go1(); } else { (S.roles = S.roles || []).push({ n: DP.n, t: Date.now() }); save(); blockAction(); $("#rnote").innerHTML = `<p class="good"><b>Bravo.</b> Ce jeu de rôle reviendra dimanche.</p>`; $("#rgo").remove(); }
@@ -482,7 +484,8 @@ window.openComm = (n, planId, mode, k) => {
   const c = COMM.find(x => x.n === n); track("comm", "Communication " + n);
   if (k === undefined || k >= c.dlgs.length) k = sitOfDay(n);
   const sitTabs = c.dlgs.length > 1 ? `<div class="row">${c.dlgs.map((d, j) => `<button type="button" class="pill ${j === k ? "on" : ""}" onclick="openComm(${n},null,'${mode || "listen"}',${j})">${(S.dlgDone || {})[n + "." + j] ? "✓ " : ""}Situation ${j + 1} · ${esc(d.sit)}</button>`).join("")}</div>` : "";
-  const audioSrc = c.dlgs.length > 1 ? `audio/comm/${String(n).padStart(2, "0")}-${k + 1}.mp3` : c.bookAudio;
+  // the book's recording, named by its CD track number (audio/comm/04.mp3)
+  const trk = c.dlgs[k].track, audioSrc = /^\d+$/.test(trk) ? `audio/comm/${trk.padStart(2, "0")}.mp3` : "";
   const chap = c.grammar.map(g => { const l = LESSONS.find(x => x.n === g), done = isDone("lesson:" + l.id);
     return `<a href="#" onclick="openLesson('${l.id}');return false" class="chip" style="${done ? "background:#DFF3E7" : ""}">Grammaire ${g} · ${done ? "apprise" : "à mémoriser comme phrase"}</a>`; }).join("");
   const tex = c.texTopics.map(t => `<a class="chip" target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(t)}">Tex : ${esc(t)}</a>`).join("");
@@ -492,11 +495,15 @@ window.openComm = (n, planId, mode, k) => {
     <p class="mut" style="margin:0">Point de correction de la semaine : <b style="color:var(--fg)">${esc(focus)}</b></p>
     <div><span class="chip">Livre p. ${c.bookPages[0]}–${c.bookPages[1]}</span><span class="chip">${c.level}</span>${chap}${tex}${voc}<a class="chip" target="_blank" rel="noopener" href="${FI_BASE}${String(c.fiChapter).padStart(2, "0")}/">FI ch. ${String(c.fiChapter).padStart(2, "0")}</a></div>
     ${sitTabs}
-    <div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre (${esc(audioSrc)}) — à écouter en lisant votre livre :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''" onerror="window.bookAudioFallback&&bookAudioFallback(this,'${audioSrc}')"></audio></div>
-    <p class="mut" style="margin:0;font-size:14px">Ce dialogue est une version réécrite pour le jeu de rôle ; le texte original est dans votre livre.</p></div>`;
+    ${audioSrc ? `<div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre · piste ${esc(trk)} :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''" onerror="window.bookAudioFallback&&bookAudioFallback(this,'${audioSrc}')"></audio></div>` : ""}
+    <div>${saisieBtn("comm", n)}</div></div>`;
+  if (!c.dlgs[k].lines.length) { // not entered yet: only the book's title, situation and pages
+    view.innerHTML = `<h1>Communication ${n} · ${esc(c.title)}</h1><p class="sub">${esc(c.dlgs[k].sit)} · livre p. ${c.dlgs[k].page}</p>${info}${notEntered("comm", n)}`;
+    blockAction(); scrollTo(0, 0); return;
+  }
   dialoguePage({ n, k, sub: `Communication ${n} · ${c.title} · ${c.dlgs[k].sit}`, subBase: `Communication ${n} · ${c.title}`, info, lines: c.dlgs[k].lines, ex: c.ex, pages: c.bookPages.join("–"), mode: mode || "listen" });
   DP.sit = k;
-  if (!RUN_ACTIVE) view.insertAdjacentHTML("beforeend", `<div class="card"><h3>Jeu de rôle du livre</h3><p style="margin:0">${esc(c.task)}</p></div>
+  if (!RUN_ACTIVE) view.insertAdjacentHTML("beforeend", `<div class="card"><h3>Activité du livre</h3><p style="margin:0;white-space:pre-line">${esc(c.task || "Rejouez le dialogue du livre.")}</p></div>
     <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});go('comm')">✓ Dialogue terminé</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
 };
 // A2 grammar block: the grammar of today's dialogue (chapters already studied, Tex for new points) + conjugation
@@ -516,7 +523,7 @@ window.openRelisten = () => {
   view.innerHTML = `<h1>Réécoute rapide</h1><p class="sub">Des dialogues déjà travaillés, plus vite : ×1,15 puis ×1,3. Le matériel est connu : on entraîne la vitesse.</p>
    <div class="card">${list.map(n => { const c = COMM.find(x => x.n === n); return `<div class="todo"><div style="flex:1"><b>${n}. ${esc(c.title)}</b></div><button class="b s" onclick="relisten(${n},1.15)">×1,15</button><button class="b s" onclick="relisten(${n},1.3)">×1,3</button></div>`; }).join("")}</div>`;
 };
-window.relisten = async (n, rate) => { const c = COMM.find(x => x.n === n); speechSynthesis.cancel(); for (const d of c.dlgs) for (const l of d.lines) await sayP(l.text, l.who, rate); blockAction(); };
+window.relisten = async (n, rate) => { const c = COMM.find(x => x.n === n); speechSynthesis.cancel(); for (const d of c.dlgs) for (const l of withAB(d.lines)) await sayP(l.text, l.ab, rate); blockAction(); };
 window.openRFI = () => {
   setView("today", "input");
   view.innerHTML = `<h1>Actualité en français facile</h1><div class="card"><p>Ouvrez le <a target="_blank" rel="noopener" href="https://francaisfacile.rfi.fr/fr/podcasts/journal-en-fran%C3%A7ais-facile/">Journal en français facile (RFI)</a> et écoutez 10 minutes, avec la transcription si possible.</p>

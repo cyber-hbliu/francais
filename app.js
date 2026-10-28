@@ -17,6 +17,7 @@ function load() {
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { console.warn(e); } }
 load();
+applyBook(S); // the content you entered from the three books → LESSONS / COMM / VOCAB (book.js)
 // study time is also kept per device (S.dev), so two devices studying on the same day add up after a sync
 const DEV = (() => { let d = "local"; try { d = localStorage.getItem("fr-dev"); if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem("fr-dev", d); } } catch (e) { } return d; })();
 if (!S.dev) S.dev = { [DEV]: JSON.parse(JSON.stringify(S.daily)) }; // history so far belongs to this device
@@ -164,7 +165,8 @@ function today() {
   // Progress is saved automatically; this only nudges an export once there is something worth backing up
   const hasProgress = Object.keys(S.cards).length >= 20 || Object.values(S.todo).some(t => t.done);
   const ago = S.lastExport ? Math.floor((Date.now() - S.lastExport) / DAY) : null;
-  const backup = hasProgress && (ago === null || ago > 7) ? `<div class="card">💾 Votre progression est enregistrée automatiquement dans ce navigateur.
+  // and every Sunday (the book entries and the recordings are in the export too)
+  const backup = hasProgress && (ago === null || ago > 7 || (new Date().getDay() === 0 && ago > 0)) ? `<div class="card">💾 Votre progression est enregistrée automatiquement dans ce navigateur.
     Dernière sauvegarde exportée : <b>${ago === null ? "jamais" : "il y a " + ago + " jours"}</b>. Exportez-en une pour ne rien perdre si les données du navigateur sont effacées ou si vous changez d'appareil.
     <button class="b s" onclick="go('sync')">Exporter une sauvegarde</button></div>` : "";
   view.innerHTML = `${backup}
@@ -205,7 +207,7 @@ function progressOverview(due, tough, doneN) {
    <p style="margin:6px 0">Communication : <b>${COMM.filter(c => S.todo["comm:" + c.n] && S.todo["comm:" + c.n].done).length}</b> / 40 unités${bar(COMM.filter(c => S.todo["comm:" + c.n] && S.todo["comm:" + c.n].done).length, 40)}</p>
    <p style="margin:6px 0">Mémoire : <b>${seen}</b> cartes vues · <b>${known}</b> retenues (≥ 1 semaine) · <b>${mat}</b> acquises (≥ 3 semaines) / ${ALL.length}${bar(mat, ALL.length)}</p></div>`;
 }
-function newQuota() { const d = S.daily[dstr()] || {}, q = window.phase ? phase().newCards : S.settings.newPerDay; return Math.max(0, q - (d.newSeen || 0)); }
+function newQuota() { const d = S.daily[dstr()] || {}, q = S.settings.newOverride || (window.phase ? phase().newCards : S.settings.newPerDay); return Math.max(0, q - (d.newSeen || 0)); }
 function streak() {
   let n = 0, t = Date.now();
   const active = d => (S.dayDone || {})[d] || S.sessions.some(s => dstr(s.start) === d && s.total > 0) || (S.daily[d] && S.daily[d].secs > 60);
@@ -219,8 +221,8 @@ function renderLearn() {
   view.innerHTML = `<div class="card"><h2>Grammaire — 60 unités + 8 bilans</h2><p class="mut">Ordre des unités de la Grammaire progressive du français (débutant). <span class="tag">A2</span> = point qui relève déjà du niveau A2.</p>` +
     BILANS.map((b, bi) => LESSONS.filter(l => l.n >= b[0] && l.n <= b[1]).map(l => {
       const ids = l.ex.map((_, i) => `g:${l.id}:${i}`), m = ids.filter(isMature).length, seen = ids.filter(id => card(id)).length;
-      return `<div class="todo"><div style="flex:1"><b>${l.n}.</b> <a href="#" onclick="openLesson('${l.id}');return false">${esc(l.title)}</a> ${l.level === "A2" ? '<span class="tag">A2</span>' : ""}<span class="mut">${seen}/${ids.length} vus · ${m} acquis</span></div></div>`;
-    }).join("") + `<div class="todo"><div style="flex:1">📝 <a href="#" onclick="startReview('bilan:${bi}');return false"><b>Bilan n° ${bi + 1}</b></a> <span class="mut">unités ${b[0]}–${b[1]}</span></div></div>`).join("") + `</div>`;
+      return `<div class="todo"><div style="flex:1"><b>${l.n}.</b> <a href="#" onclick="openLesson('${l.id}');return false">${esc(l.title)}</a> ${l.level === "A2" ? '<span class="tag">A2</span>' : ""}${aSaisir("gram", l.n)} <span class="mut">p. ${l.page}${l.entered ? ` · ${seen}/${ids.length} vus · ${m} acquis` : ""}</span></div></div>`;
+    }).join("") + `<div class="todo"><div style="flex:1">📝 <a href="#" onclick="startReview('bilan:${bi}');return false"><b>Bilan n° ${bi + 1}</b></a> <span class="mut">unités ${b[0]}–${b[1]} · p. ${b[2]}</span></div></div>`).join("") + `</div>`;
 }
 window.openListen = (i, planId) => {
   if (window.stopActivity) stopActivity(); curStrand = "input";
@@ -238,15 +240,16 @@ window.openLesson = id => {
   const l = LESSONS.find(x => x.id === id); if (window.stopActivity) stopActivity(); tab = "learn"; curStrand = "study";
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === "learn"));
   track("lesson", "Leçon: " + l.title);
-  view.innerHTML = `<p><a href="#" onclick="go('learn');return false">← Grammaire</a></p>
-  <div class="card"><span class="tag">Unité ${l.n}</span><span class="tag">${l.level}</span><h2>${esc(l.title)}</h2>
+  const head = `<p class="backlink"><a href="#" onclick="go('learn');return false">← Grammaire</a></p>`;
+  if (!l.entered) { view.innerHTML = head + notEntered("gram", l.n); scrollTo(0, 0); return; }
+  view.innerHTML = head + `<div class="card"><span class="tag">Chapitre ${l.n}</span><span class="tag">${l.level}</span><span class="tag">Livre p. ${esc(l.bookPage || l.page)}</span><h2>${esc(l.title)}</h2>
+   <p class="mut" style="margin-top:0">${l.subs.map(esc).join(" · ")}</p>
    <ul>${l.rules.map(r => `<li>${hl(r)}</li>`).join("")}</ul></div>
-  <div class="card"><h3>Exemples</h3>${l.examples.map(e => `<p>${spk(e[0])} ${hl(e[0])}<br><span class="mut">${esc(e[1])}</span></p>`).join("")}
-   <p class="mut">Plus d'exemples authentiques : ${tv5Link(l.title)} · Chapitre associé (approximatif) : ${fiLink(l.fi)}</p></div>
-  <div class="card"><p>🗣️ Faites les exercices <b>à voix haute</b> avant de taper la réponse. Puis écoutez le petit dialogue de Tex sur le même point :
-   <a target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(l.title.split(/[;:(]/)[0].trim())}">Tex's French Grammar · ${esc(l.title.split(/[;:(]/)[0].trim())}</a>.</p></div>
-  <p class="row"><button class="b" onclick="startReview('lesson:${l.id}')">Pratiquer (${l.ex.length} exercices)</button>
-  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button></p>`;
+  ${l.examples.length ? `<div class="card"><h3>Exemples</h3>${l.examples.map(e => `<p>${spk(plain(e[0]))} ${hl(e[0])}${e[1] ? `<br><span class="mut">${esc(e[1])}</span>` : ""}</p>`).join("")}</div>` : ""}
+  <div class="card"><p>Faites les exercices <b>à voix haute</b> avant de taper la réponse. Puis écoutez le petit dialogue de Tex sur le même point :
+   <a target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(l.subs[0].replace(/[«»]/g, "").split(/[;:(]/)[0].trim())}">Tex's French Grammar · ${esc(l.subs[0])}</a> · ${fiLink(l.fi)}</p></div>
+  <p class="row">${l.ex.length ? `<button class="b" onclick="startReview('lesson:${l.id}')">Pratiquer (${l.ex.length} exercices)</button>` : ""}
+  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>`;
   scrollTo(0, 0);
 };
 window.markLesson = id => { PLAN.filter(p => p.type === "lesson" && p.target === id).forEach(p => S.todo[p.id] = { done: true, at: Date.now() }); save(); go("today"); };
@@ -259,12 +262,12 @@ const wordRow = v => `<tr><td>${spk(v.fr)}</td><td><b>${frHTML(v.fr)}</b></td><t
 function renderVocab() {
   view.innerHTML = `<div class="card"><h2>Vocabulaire — kit de survie + 28 unités</h2>
    <p><a href="#" onclick="openSurvival();return false"><b>0. Kit de survie</b></a> <span class="mut">${SURVIVAL.length} phrases essentielles — à apprendre en premier</span></p>
-   <p class="mut">Thèmes et ordre du Vocabulaire progressif du français (A1). Mots et enregistrements : Français interactif (UT Austin, CC BY 3.0).</p>
+   <p class="mut">Unités du Vocabulaire progressif du français (débutant) : d'abord les mots du livre que vous avez saisis, puis les mots complémentaires de Français interactif (UT Austin, CC BY 3.0) avec leurs enregistrements.</p>
    <input type="text" id="vq" placeholder="Rechercher un mot (français ou anglais)…"></div>
    <div id="vres"></div>`;
   const list = () => VP_UNITS.map(u => {
     const ws = VOCAB.filter(v => v.unit === u.n), m = ws.filter(v => isMature("v:" + v.id)).length;
-    return `<div class="todo"><div style="flex:1"><b>${u.n}.</b> <a href="#" onclick="openUnit(${u.n});return false">${esc(u.title)}</a> <span class="mut">${ws.length} mots · ${m} acquis · ${u.secs.filter(i => FI_VOC[i].audio).length} 🎧</span></div></div>`;
+    return `<div class="todo"><div style="flex:1"><b>${u.n}.</b> <a href="#" onclick="openUnit(${u.n});return false">${esc(u.title)}</a> ${aSaisir("vocab", u.n)} <span class="mut">p. ${u.page} · ${ws.length} mots · ${m} acquis</span></div></div>`;
   }).join("");
   const draw = () => {
     const q = $("#vq").value.trim().toLowerCase();
@@ -281,9 +284,12 @@ window.openUnit = n => {
   track("vocab", "Vocabulaire " + n);
   view.innerHTML = `<p><a href="#" onclick="go('vocab');return false">← Vocabulaire</a></p>
   <div class="card"><span class="tag">Unité ${n}</span><h2>${esc(u.title)}</h2>
-   <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button><button class="b s" onclick="markUnit(${n})">Marquer la séance comme terminée</button></p>
-   <p class="mut">🎧 = enregistrement original de Français interactif (toute la liste lue par un locuteur natif). 🔊 = un seul mot, voix française de votre appareil.</p></div>` +
-    u.secs.map(si => { const s = FI_VOC[si]; return `<div class="card"><h3>${esc(s.title)} <span class="mut">· FI ch. ${String(s.ch).padStart(2, "0")}</span></h3>
+   <p class="mut" style="margin-top:0">Livre p. ${esc(u.bookPage || u.page)}</p>
+   <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button><button class="b s" onclick="markUnit(${n})">Marquer la séance comme terminée</button>${saisieBtn("vocab", n)}</p>
+   <p class="mut">🎧 = enregistrement original de Français interactif (toute la liste lue par un locuteur natif). 🔊 = un seul mot, voix française de votre appareil.</p></div>
+  <div class="card"><h3>Vocabulaire progressif — les mots du livre</h3>${u.book.length ? `<div style="overflow-x:auto"><table>${u.book.map(wordRow).join("")}</table></div><p class="mut">🎧 sur la carte = le même mot dans Français interactif.</p>` : `<p>Pas encore saisis.</p>`}</div>
+  <h2 style="margin:20px 0 8px">Français interactif — mots complémentaires</h2>` +
+    u.secs.filter(si => VOCAB.some(v => v.sec === si)).map(si => { const s = FI_VOC[si]; return `<div class="card"><h3>${esc(s.title)} <span class="mut">· FI ch. ${String(s.ch).padStart(2, "0")}</span></h3>
      ${s.audio ? `<audio controls preload="none" src="${s.audio}" style="width:100%"></audio>` : ""}
      <div style="overflow-x:auto"><table>${VOCAB.filter(v => v.sec === si).map(wordRow).join("")}</table></div></div>`; }).join("");
   scrollTo(0, 0);
@@ -314,7 +320,8 @@ function currentWeek() { return weekOf(dstr()); }
 // New cards are introduced in book order, only from units reached in the plan so far
 // and interleaved across lists, max 3 new per list per day, so related words (days, colours…) don't interfere
 const groupOf = id => ITEMS[id].kind === "g" ? "g" + ITEMS[id].l.id : "v" + ITEMS[id].v.sec;
-const rankOf = id => { const it = ITEMS[id]; if (it.kind !== "v") return 0; const r = (window.FREQ || {})[it.v.fr]; return r === undefined ? 5000 : r; };
+// new cards: the book's words before the Français interactif complements, each by frequency
+const rankOf = id => { const it = ITEMS[id]; if (it.kind !== "v") return 0; const r = (window.FREQ || {})[it.v.fr], f = r === undefined ? 5000 : r; return it.v.src === "livre" ? f - 1e5 : f; };
 const isPhrase = id => ITEMS[id].kind === "v" && /^(sv|cm|d_)/.test(ITEMS[id].v.id) && /\s/.test(ITEMS[id].v.fr);
 function newInPlanOrder() {
   const groups = new Map(), t0 = new Date().setHours(0, 0, 0, 0), today = {}, T = dstr();
@@ -393,6 +400,12 @@ function nextCard() {
      <p class="row"><button class="b" id="chk">Vérifier</button></p><div id="ans"></div></div>`;
     const inp = $("#inp"); inp.focus();
     const check = () => {
+      if (!it.a) { // no answer entered: compare with the corrigé yourself
+        if (!inp.value.trim()) return; inp.disabled = true; $("#chk").remove();
+        $("#ans").innerHTML = `<p class="mut">Comparez avec le corrigé de votre livre.</p><p class="row"><button class="b bad" data-g="0">Faux</button><button class="b ok" data-g="2">Juste</button></p>`;
+        $("#ans").onclick = e => { if (e.target.dataset.g !== undefined) answer(id, +e.target.dataset.g); };
+        return;
+      }
       const u = normAns(inp.value), a = normAns(it.a);
       let g = u === a ? 2 : (stripAcc(u) === stripAcc(a) && u ? 1 : 0);
       if (!u) return;
@@ -554,13 +567,18 @@ function merge(a, b) { // b merged into a
   for (const k of ["writing", "talks", "dictee", "genre", "nombres"]) { const seen = new Set((a[k] || []).map(x => x.t)); a[k] = (a[k] || []).concat((b[k] || []).filter(x => !seen.has(x.t))).sort((x, y) => x.t - y.t); }
   a.conj = a.conj || {}; for (const [k, v] of Object.entries(b.conj || {})) if (!a.conj[k] || v.last > a.conj[k].last) a.conj[k] = v;
   a.lastExport = Math.max(a.lastExport || 0, b.lastExport || 0);
+  // the book content you entered: the most recent entry of each unit wins
+  a.book = a.book || {}; for (const [k, units] of Object.entries(b.book || {})) { const m = a.book[k] || (a.book[k] = {}); for (const [n, e] of Object.entries(units)) if (!m[n] || (e.at || 0) > (m[n].at || 0)) m[n] = e; }
 }
 function renderSync() {
   view.innerHTML = `<div class="card"><h2>Synchroniser la progression</h2>
   <p>Vos données restent dans ce navigateur. Pour les synchroniser entre appareils : exportez un fichier, mettez-le dans iCloud / Dropbox / Drive, puis importez-le sur l'autre appareil. L'import <b>fusionne</b> (pas d'écrasement) : chaque carte garde la version la plus récente, les séances sont additionnées.</p>
   <p class="row"><button class="b" id="ex">⬇ Exporter</button><label class="b s" style="cursor:pointer">⬆ Importer<input type="file" id="im" accept=".json" hidden></label></p>
   <p class="mut">Dernière sauvegarde : ${S.lastExport ? new Date(S.lastExport).toLocaleString() : "jamais"}</p><p id="msg"></p></div>
-  <div class="card"><h3>Réglages</h3><p>Nouvelles cartes par jour : <input type="text" id="np" value="${S.settings.newPerDay}" style="width:70px"></p>
+  <div class="card"><h3>Réglages</h3>
+  <p>Temps par jour (à partir de la 3e semaine ; avant, la montée progressive) : <select id="mn">${[90, 120, 160].map(m => `<option value="${m}" ${(S.settings.minutes || 160) == m ? "selected" : ""}>${m} min</option>`).join("")}</select></p>
+  <p>Nouvelles cartes par jour : <select id="np"><option value="">selon la semaine (15, puis 30)</option>${[15, 30].map(m => `<option ${S.settings.newOverride == m ? "selected" : ""}>${m}</option>`).join("")}</select></p>
+  <p>Objectif après l'A2 : <select id="ob">${[["tcf", "TCF Canada (exercices de type TCF à partir de janvier, en B1)"], ["delf", "DELF B1"], ["ecrit", "Écrit"]].map(([v, t]) => `<option value="${v}" ${S.settings.objective === v ? "selected" : ""}>${t}</option>`).join("")}</select></p>
   <p><label><input type="checkbox" id="sp" ${S.settings.speak ? "checked" : ""}> Prononcer automatiquement le français</label></p>
   <p>Voix française (mots isolés) : <select id="vo">${frVoices().map(v => `<option ${bestVoice() === v ? "selected" : ""}>${esc(v.name)}</option>`).join("") || "<option>aucune voix française installée</option>"}</select>
    Vitesse : <select id="rt">${[0.7, 0.8, 0.85, 0.9, 1].map(r => `<option ${(S.settings.rate || 0.85) == r ? "selected" : ""}>${r}</option>`).join("")}</select>
@@ -576,7 +594,9 @@ function renderSync() {
     try { const b = JSON.parse(await e.target.files[0].text()); if (!b.cards) throw 0; merge(S, b); save(); $("#msg").textContent = "Fusionné ✅ — " + Object.keys(S.cards).length + " cartes."; }
     catch (err) { $("#msg").textContent = "Fichier invalide."; }
   };
-  $("#np").onchange = e => { S.settings.newPerDay = Math.max(0, +e.target.value || 0); save(); };
+  $("#np").onchange = e => { S.settings.newOverride = +e.target.value || 0; save(); };
+  $("#mn").onchange = e => { S.settings.minutes = +e.target.value; save(); };
+  $("#ob").onchange = e => { S.settings.objective = e.target.value; save(); };
   $("#sp").onchange = e => { S.settings.speak = e.target.checked; save(); };
   $("#vo").onchange = e => { S.settings.voice = e.target.value; save(); };
   $("#rt").onchange = e => { S.settings.rate = +e.target.value; save(); };

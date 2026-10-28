@@ -95,7 +95,7 @@ a.lnk,button.lnk{background:none;border:0;padding:0;color:var(--mut);font:inheri
 .lines{display:flex;flex-direction:column;gap:12px}
 .ln{border-radius:14px;padding:16px 20px;border:1px solid var(--bd);background:#fff;display:flex;flex-direction:column;gap:12px}
 .ln .body{display:flex;gap:16px;align-items:flex-start;text-align:left;padding:0;border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;width:100%}
-.ln .who{flex:none;width:32px;height:32px;border-radius:16px;background:var(--chip);display:inline-flex;align-items:center;justify-content:center;font-weight:600;color:var(--mut)}
+.ln .who{flex:none;min-width:32px;max-width:9em;height:auto;min-height:28px;padding:4px 10px;border-radius:14px;background:var(--chip);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;line-height:1.2;text-align:center;color:var(--mut)}
 .ln .fr{font-size:22px;line-height:1.35;display:block}
 .ln .en{font-size:15px;color:var(--mut);display:block}
 .ln.cur{border:2px solid var(--sc,var(--ac));background:var(--sc-bg,#F2F6FC)}
