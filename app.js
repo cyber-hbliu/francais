@@ -241,7 +241,7 @@ window.openLesson = id => {
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === "learn"));
   track("lesson", "Leçon: " + l.title);
   const head = `<p class="backlink"><a href="#" onclick="go('learn');return false">← Grammaire</a></p>`;
-  if (!l.entered) { view.innerHTML = head + notEntered("gram", l.n) + bookPagesCard("gram", l.n); scrollTo(0, 0); return; }
+  if (!l.entered) { view.innerHTML = head + notEntered("gram", l.n); scrollTo(0, 0); return; }
   view.innerHTML = head + `<div class="card"><span class="tag">Chapitre ${l.n}</span><span class="tag">${l.level}</span><span class="tag">Livre p. ${esc(l.bookPage || l.page)}</span><h2>${esc(l.title)}</h2>
    <p class="mut" style="margin-top:0">${l.subs.map(esc).join(" · ")}</p>
    <ul>${l.rules.map(r => `<li>${hl(r)}</li>`).join("")}</ul></div>
@@ -249,7 +249,7 @@ window.openLesson = id => {
   <div class="card"><p>Faites les exercices <b>à voix haute</b> avant de taper la réponse. Puis écoutez le petit dialogue de Tex sur le même point :
    <a target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(l.subs[0].replace(/[«»]/g, "").split(/[;:(]/)[0].trim())}">Tex's French Grammar · ${esc(l.subs[0])}</a> · ${fiLink(l.fi)}</p></div>
   <p class="row">${l.ex.length ? `<button class="b" onclick="startReview('lesson:${l.id}')">Pratiquer (${l.ex.length} exercices)</button>` : ""}
-  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>${bookPagesCard("gram", l.n)}`;
+  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>`;
   scrollTo(0, 0);
 };
 window.markLesson = id => { PLAN.filter(p => p.type === "lesson" && p.target === id).forEach(p => S.todo[p.id] = { done: true, at: Date.now() }); save(); go("today"); };
@@ -288,7 +288,6 @@ window.openUnit = n => {
    <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button><button class="b s" onclick="markUnit(${n})">Marquer la séance comme terminée</button>${saisieBtn("vocab", n)}</p>
    <p class="mut">🎧 = enregistrement original de Français interactif (toute la liste lue par un locuteur natif). 🔊 = un seul mot, voix française de votre appareil.</p></div>
   <div class="card"><h3>Vocabulaire progressif — les mots du livre</h3>${u.book.length ? `<div style="overflow-x:auto"><table>${u.book.map(wordRow).join("")}</table></div><p class="mut">🎧 sur la carte = le même mot dans Français interactif.</p>` : `<p>Pas encore saisis.</p>`}</div>
-  ${bookPagesCard("vocab", n)}
   <h2 style="margin:20px 0 8px">Français interactif — mots complémentaires</h2>` +
     u.secs.filter(si => VOCAB.some(v => v.sec === si)).map(si => { const s = FI_VOC[si]; return `<div class="card"><h3>${esc(s.title)} <span class="mut">· FI ch. ${String(s.ch).padStart(2, "0")}</span></h3>
      ${s.audio ? `<audio controls preload="none" src="${s.audio}" style="width:100%"></audio>` : ""}
@@ -560,7 +559,7 @@ function merge(a, b) { // b merged into a
   for (const [d, v] of Object.entries(b.daily || {})) if (v.st && !sum[d]) { const x = a.daily[d]; x.st = x.st || {}; for (const k in v.st) x.st[k] = Math.max(x.st[k] || 0, v.st[k]); }
   a.notes = Object.assign({}, b.notes || {}, a.notes || {});
   a.custom = Object.assign({}, b.custom || {}, a.custom || {});
-  for (const k of ["dayplan", "dayDone", "roleNotes", "exams", "dlgDone"]) a[k] = Object.assign({}, b[k] || {}, a[k] || {});
+  for (const k of ["dayplan", "dayDone", "roleNotes", "exams", "dlgDone", "actAns"]) a[k] = Object.assign({}, b[k] || {}, a[k] || {});
   // a day's blocks: keep the version where more blocks are done (studying on the phone, then on the computer)
   a.run = a.run || {}; for (const [d, r] of Object.entries(b.run || {})) { const l = a.run[d], nd = x => x ? x.blocks.filter(y => y.done).length : -1; if (nd(r) > nd(l)) a.run[d] = r; }
   { const seen = new Set((a.roles || []).map(x => x.t)); a.roles = (a.roles || []).concat((b.roles || []).filter(x => !seen.has(x.t))); }

@@ -498,14 +498,13 @@ window.openComm = (n, planId, mode, k) => {
     ${audioSrc ? `<div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre · piste ${esc(trk)} :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''" onerror="window.bookAudioFallback&&bookAudioFallback(this,'${audioSrc}')"></audio></div>` : ""}
     <div>${saisieBtn("comm", n)}</div></div>`;
   if (!c.dlgs[k].lines.length) { // not entered yet: only the book's title, situation and pages
-    view.innerHTML = `<h1>Communication ${n} · ${esc(c.title)}</h1><p class="sub">${esc(c.dlgs[k].sit)} · livre p. ${c.dlgs[k].page}</p>${info}${notEntered("comm", n)}${bookPagesCard("comm", n)}`;
+    view.innerHTML = `<h1>Communication ${n} · ${esc(c.title)}</h1><p class="sub">${esc(c.dlgs[k].sit)} · livre p. ${c.dlgs[k].page}</p>${info}${notEntered("comm", n)}`;
     blockAction(); scrollTo(0, 0); return;
   }
   dialoguePage({ n, k, sub: `Communication ${n} · ${c.title} · ${c.dlgs[k].sit}`, subBase: `Communication ${n} · ${c.title}`, info, lines: c.dlgs[k].lines, ex: c.ex, pages: c.bookPages.join("–"), mode: mode || "listen" });
   DP.sit = k;
   if (!RUN_ACTIVE) view.insertAdjacentHTML("beforeend", `<div class="card"><h3>Activité du livre</h3><p style="margin:0;white-space:pre-line">${esc(c.task || "Rejouez le dialogue du livre.")}</p></div>
-    ${c.acts ? `<div class="card"><h3>Activités du livre</h3><p class="mut" style="margin-top:0">Faites-les à voix haute ou par écrit, sur la page du livre ci-dessous.</p><div style="white-space:pre-wrap">${esc(c.acts)}</div></div>` : ""}
-    ${bookPagesCard("comm", n)}
+    ${c.acts ? actsHTML(n, c.acts) : ""}
     <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});go('comm')">✓ Dialogue terminé</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
 };
 // A2 grammar block: the grammar of today's dialogue (chapters already studied, Tex for new points) + conjugation

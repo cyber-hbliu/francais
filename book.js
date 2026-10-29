@@ -156,6 +156,17 @@ window.bkImportAll = async kind => {
   if (!BK_STOP) setTimeout(() => location.reload(), 800);
 };
 window.bkStopAll = () => { BK_STOP = true; };
+// the book's activities as an exercise sheet: each item gets an answer field, kept with your progress (S.actAns)
+window.actsHTML = (n, acts) => {
+  const A = S.actAns || {}; let i = 0;
+  const body = bkLines(acts).map(l => {
+    if (/^\d+\.\s+(Compréhension|Grammaire|Vocabulaire|Communication|Phonétique|Prononciation|Expression|Production|Écrit|Oral|Lexique|À vous)/.test(l)) return `<h4 style="margin:16px 0 6px">${esc(l)}</h4>`;
+    const k = `${n}.${i++}`;
+    return `<div class="row" style="align-items:center;gap:10px;margin:4px 0"><span style="flex:1 1 240px">${esc(l)}</span><input type="text" value="${esc(A[k] || "")}" data-k="${k}" oninput="actSave(this)" style="flex:1 1 200px" autocomplete="off" autocapitalize="off" aria-label="Votre réponse"></div>`;
+  }).join("");
+  return `<div class="card"><h3>Activités du livre</h3><p class="mut" style="margin-top:0">Répondez à voix haute, puis écrivez votre réponse. Vos réponses sont gardées.</p>${body}</div>`;
+};
+window.actSave = el => { S.actAns = S.actAns || {}; S.actAns[el.dataset.k] = el.value; clearTimeout(actSave.t); actSave.t = setTimeout(save, 600); };
 // CD tracks run in order through the book: a track the OCR missed is the one after the previous dialogue (or before the next)
 function bkFillTracks() {
   const E = S.book.comm || {}, seq = [];
