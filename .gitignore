@@ -1,5 +1,8 @@
 # personal recordings of the textbooks (private, never published)
 audio/comm/
+audio/gram/
+audio/voc/
+.audio-prive/
 # local tooling
 .claude/
 .DS_Store

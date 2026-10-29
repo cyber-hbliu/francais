@@ -33,7 +33,7 @@ Object.keys(S.todo).forEach(k => { const m = k.match(/^((?!tv5:).+):w\d+$/); if 
 // ---------- cards ----------
 const ITEMS = {};
 VOCAB.forEach(v => ITEMS["v:" + v.id] = { id: "v:" + v.id, kind: "v", v, theme: v.theme, unit: v.unit, level: v.level });
-LESSONS.forEach(l => l.ex.forEach((e, i) => ITEMS[`g:${l.id}:${i}`] = { id: `g:${l.id}:${i}`, kind: "g", l, q: e[0], a: e[1], inst: e[2] || "", theme: "Grammaire: " + l.title, level: l.level }));
+// the grammar book's exercises are not cards (they depend on pictures and context): they are done once in the unit, and the bilans test again
 const ALL = Object.keys(ITEMS);
 const card = id => S.cards[id];
 const isMature = id => card(id) && card(id).interval >= 21;
@@ -87,7 +87,10 @@ setInterval(() => {
   const playing = !player.paused || speechSynthesis.speaking || [...AUDIO_ON].some(a => !a.paused) || [...document.querySelectorAll("audio")].some(a => !a.paused) || (typeof rec !== "undefined" && rec && rec.state === "recording") || window.MIC_ON;
   if (playing) lastAct = now;
   if ((document.visibilityState === "visible" && now - lastAct < 60e3) || playing) {
-    addDay("secs", dt); if (curStrand) addDay(null, dt, curStrand);
+    // the time of a unit's step goes to that step's strand, whatever page it opened
+    const st = window.STEP && now - STEP.t < 4 * 3600e3 ? STEP.strand : curStrand;
+    addDay("secs", dt); if (st) addDay(null, dt, st);
+    if (window.STEP) { S.stepSecs = S.stepSecs || {}; const k = STEP.k + ":" + STEP.s; S.stepSecs[k] = (S.stepSecs[k] || 0) + dt; }
     save();
   }
 }, 15e3);
@@ -121,17 +124,18 @@ const tv5Link = (label) => `<a target="_blank" rel="noopener" href="${TV5}">TV5M
 // ---------- router ----------
 const view = $("#view");
 let tab = "today";
-const PARENT = { uwords: "mots", errs: "mots", dico: "mots", progress: "more", comm: "more", learn: "more", vocab: "more", highlight: "more", recs: "more", method: "more", sync: "more" };
-const SUBS = { mots: [["uwords", "Mots de l'unité"], ["errs", "Carnet d'erreurs"], ["dico", "Dictionnaire"]], more: [["progress", "Statistiques"], ["comm", "Communication"], ["learn", "Grammaire"], ["vocab", "Vocabulaire"], ["highlight", "Surligneur"], ["recs", "Enregistrements"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
+const PARENT = { uwords: "mots", errs: "mots", dico: "mots", progress: "more", livres: "more", comm: "more", learn: "more", vocab: "more", highlight: "more", recs: "more", method: "more", sync: "more" };
+const SUBS = { mots: [["uwords", "Mots de l'unité"], ["errs", "Carnet d'erreurs"], ["dico", "Dictionnaire"]], more: [["progress", "Statistiques"], ["livres", "Livres"], ["recs", "Enregistrements"], ["highlight", "Surligneur"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
 function go(t, arg) {
   if (window.stopActivity) stopActivity();
-  if (t === "today" && window.RUN_ACTIVE && window.blockReturn) { blockReturn(); return; } // inside a block: back to the block screen
-  t = { me: "progress", books: "comm", tools: "highlight", review: "uwords" }[t] || t; // older links
+  window.STEP = null; // leaving a unit step
+  t = { me: "progress", books: "livres", tools: "highlight", review: "uwords" }[t] || t; // older links
   if (SUBS[t]) t = t === "mots" ? "uwords" : (S.ui || {})[t] || SUBS[t][0][0]; // "Mots" always opens the unit's words
-  tab = t; curStrand = { learn: "study", vocab: "study", uwords: "study", errs: "study", dico: "study", comm: "output", journal: "output" }[t] || null;
+  tab = t; curStrand = { learn: "study", vocab: "study", uwords: "study", errs: "study", dico: "study", journal: "output" }[t] || null;
   const top = PARENT[t] || t; if (PARENT[t]) { S.ui = S.ui || {}; S.ui[top] = t; }
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === top));
-  ({ today: () => renderHome(), uwords: () => renderUnitWords(), errs: () => renderErrors(), journal: () => renderJournal(), method: () => renderMethod(), comm: () => renderComm(), dico: q => renderDico(q), recs: () => renderRecs(), learn: renderLearn, vocab: renderVocab, review: renderReviewHome, highlight: renderHighlight, progress: renderProgress, sync: renderSync })[t](arg);
+  ({ livres: () => renderLivres(), today: () => renderHome(), uwords: () => renderUnitWords(), errs: () => renderErrors(), journal: () => renderJournal(), method: () => renderMethod(), comm: () => renderComm(), dico: q => renderDico(q), recs: () => renderRecs(), learn: renderLearn, vocab: renderVocab, review: renderReviewHome, highlight: renderHighlight, progress: renderProgress, sync: renderSync })[t](arg);
+  if (["comm", "learn", "vocab"].includes(t)) view.insertAdjacentHTML("afterbegin", `<p class="backlink"><a href="#" onclick="go('livres');return false">← Livres</a></p>`);
   if (PARENT[t]) view.insertAdjacentHTML("afterbegin", `<div class="row subnav" style="margin-bottom:10px">${SUBS[top].map(([k, l]) => `<button class="b ${k === t ? "" : "s"}" onclick="go('${k}')">${l}</button>`).join("")}</div>`);
   scrollTo(0, 0);
   document.title = (dueIds().length ? `(${dueIds().length}) ` : "") + "Boîte à outils française";
@@ -139,47 +143,6 @@ function go(t, arg) {
 $("#nav").onclick = e => { if (e.target.dataset.tab) go(e.target.dataset.tab); };
 window.go = go;
 
-// ---------- Today ----------
-function planItemHTML(p) {
-  const done = S.todo[p.id] && S.todo[p.id].done;
-  return `<div class="todo ${done ? "done" : ""}"><input type="checkbox" ${done ? "checked" : ""} onchange="toggleTodo('${p.id}',this.checked)"><div class="t" style="flex:1">${esc(p.title)}</div><button class="b s" onclick="doPlan('${p.id}')">Go</button></div>`;
-}
-window.toggleTodo = (id, v) => { S.todo[id] = { done: v, at: Date.now() }; track("todo", "Plan", undefined); if (window.schedule) schedule(); if (v && window.onPlanDone) onPlanDone(id); save(); go(tab); };
-window.doPlan = id => {
-  const p = PLAN.find(x => x.id === id);
-  if (p.type === "lesson") { openLesson(p.target); }
-  else if (p.type === "bilan") { startReview("bilan:" + p.target); }
-  else if (p.type === "vocab") { openUnit(p.target); }
-  else if (p.type === "review") { startReview("due"); }
-  else if (p.type === "listen") { openListen(p.target, p.id); }
-  else if (p.type === "pho") { openPho(p.target, p.id); }
-  else if (p.type === "comm") { openComm(p.target, p.id); }
-  else if (p.type === "cbilan") { openCommBilan(p.target, p.id); }
-  else if (p.type === "tv5") { track("tv5", "TV5MONDE " + p.target); window.open(TV5, "_blank"); }
-  else if (p.type === "exam") { openExam(p.target, p.id); }
-};
-function today() {
-  const due = dueIds().length, tough = leeches().length;
-  const weeks = [...new Set(PLAN.map(p => p.week))];
-  const cur = weeks.find(w => PLAN.some(p => p.week === w && !(S.todo[p.id] && S.todo[p.id].done))) || weeks[weeks.length - 1];
-  const doneN = PLAN.filter(p => S.todo[p.id] && S.todo[p.id].done).length;
-  // Progress is saved automatically; this only nudges an export once there is something worth backing up
-  const hasProgress = Object.keys(S.cards).length >= 20 || Object.values(S.todo).some(t => t.done);
-  const ago = S.lastExport ? Math.floor((Date.now() - S.lastExport) / DAY) : null;
-  // and every Sunday (the book entries and the recordings are in the export too)
-  const backup = hasProgress && (ago === null || ago > 7 || (new Date().getDay() === 0 && ago > 0)) ? `<div class="card">💾 Votre progression est enregistrée automatiquement dans ce navigateur.
-    Dernière sauvegarde exportée : <b>${ago === null ? "jamais" : "il y a " + ago + " jours"}</b>. Exportez-en une pour ne rien perdre si les données du navigateur sont effacées ou si vous changez d'appareil.
-    <button class="b s" onclick="go('sync')">Exporter une sauvegarde</button></div>` : "";
-  view.innerHTML = `${backup}
-  ${progressOverview(due, tough, doneN)}
-  ${dailySession()}
-  ${weeklyGoals()}
-  <div class="card"><h2>Plan — semaine ${cur}</h2>${PLAN.filter(p => p.week === cur).map(planItemHTML).join("")}</div>
-  <div class="card"><h3>Toutes les semaines</h3>${weeks.map(w => {
-    const items = PLAN.filter(p => p.week === w), d = items.filter(p => S.todo[p.id] && S.todo[p.id].done).length;
-    return `<details ${w === cur ? "" : ""}><summary>Semaine ${w} <span class="mut">(${d}/${items.length})</span></summary>${items.map(planItemHTML).join("")}</details>`;
-  }).join("")}</div>`;
-}
 // Total active learning time (counted only while the page is visible and in use)
 function timeStats() {
   const days = Object.entries(S.daily).filter(([, v]) => (v.secs || 0) > 0);
@@ -189,26 +152,7 @@ function timeStats() {
   return { total, week, today: (S.daily[dstr()] || {}).secs || 0, active, avg: active ? total / active : 0 };
 }
 const fmtDur = s => { const m = Math.round(s / 60); return m < 60 ? m + " min" : Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0"); };
-// Progress at a glance on the first page; full details stay in the Progrès tab
-function progressOverview(due, tough, doneN) {
-  const seen = ALL.filter(id => card(id)).length, mat = ALL.filter(isMature).length, known = ALL.filter(id => card(id) && card(id).interval >= 7).length;
-  const gram = LESSONS.filter(l => PLAN.some(p => p.type === "lesson" && p.target === l.id && S.todo[p.id] && S.todo[p.id].done)).length;
-  const voc = [0, ...VP_UNITS.map(u => u.n)].filter(n => PLAN.some(p => p.type === "vocab" && p.target === n && S.todo[p.id] && S.todo[p.id].done)).length;
-  const mins = Math.round(((S.daily[dstr()] || {}).secs || 0) / 60), cw = currentWeek(), W = new Set(PLAN.map(p => p.week)).size;
-  const bar = (v, t) => `<div class="bar"><i style="width:${t ? Math.min(100, v / t * 100) : 0}%"></i></div>`;
-  return `<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Ma progression vers le A1</h2><a href="#" onclick="go('progress');return false">Détails →</a></div>
-   <div class="stats" style="margin:10px 0">
-    <div class="stat"><b>${streak()}</b>jours d'affilée</div>
-    <div class="stat"><b>${fmtDur(timeStats().total)}</b>temps total · ${mins} min aujourd'hui</div>
-    <div class="stat"><b>${due}</b>cartes à réviser</div>
-    <div class="stat"><b class="${tough ? "badc" : ""}">${tough}</b>cartes difficiles${tough ? ` · <a href="#" onclick="startReview('mistakes');return false">revoir</a>` : ""}</div></div>
-   <p style="margin:6px 0">Semaine <b>${cw}</b> · ${doneN}/${PLAN.length} étapes du plan${bar(doneN, PLAN.length)}</p>
-   <p style="margin:6px 0">Grammaire : <b>${gram}</b> / 60 unités${bar(gram, 60)}</p>
-   <p style="margin:6px 0">Vocabulaire : <b>${voc}</b> / 29 unités${bar(voc, 29)}</p>
-   <p style="margin:6px 0">Communication : <b>${COMM.filter(c => S.todo["comm:" + c.n] && S.todo["comm:" + c.n].done).length}</b> / 40 unités${bar(COMM.filter(c => S.todo["comm:" + c.n] && S.todo["comm:" + c.n].done).length, 40)}</p>
-   <p style="margin:6px 0">Mémoire : <b>${seen}</b> cartes vues · <b>${known}</b> retenues (≥ 1 semaine) · <b>${mat}</b> acquises (≥ 3 semaines) / ${ALL.length}${bar(mat, ALL.length)}</p></div>`;
-}
-function newQuota() { const d = S.daily[dstr()] || {}, q = S.settings.newOverride || (window.phase ? phase().newCards : S.settings.newPerDay); return Math.max(0, q - (d.newSeen || 0)); }
+function newQuota() { const d = S.daily[dstr()] || {}, q = Math.min(20, S.settings.newOverride || S.settings.newPerDay || 15); return Math.max(0, q - (d.newSeen || 0)); }
 function streak() {
   let n = 0, t = Date.now();
   const active = d => (S.dayDone || {})[d] || S.sessions.some(s => dstr(s.start) === d && s.total > 0) || (S.daily[d] && S.daily[d].secs > 60);
@@ -233,7 +177,7 @@ window.openListen = (i, planId) => {
    <p class="mut">Enregistrement original de Français interactif (UT Austin, CC BY 3.0). Les questions de l'exercice sont sur la page de l'écoute :
    <a target="_blank" rel="noopener" href="https://www.laits.utexas.edu/fi/listening/${String(x.ch).padStart(2, "0")}/">ouvrir l'exercice</a>.</p>
    <p><b>Pour finir :</b> racontez en une ou deux phrases ce que vous avez entendu. ${recWidget("lrec")}</p>
-   <p class="row">${planId ? `<button class="b" onclick="toggleTodo('${planId}',true);go('today')">✓ Terminé</button>` : ""}<button class="b s" onclick="go('today')">Retour</button></p></div>`;
+   <p class="row"><button class="b s" onclick="go('today')">Retour</button></p></div>`;
   if (typeof REC_CTX !== "undefined") REC_CTX = { kind: "resume", unit: "FI " + x.ch };
   scrollTo(0, 0);
 };
@@ -249,13 +193,10 @@ window.openLesson = id => {
   ${l.examples.length ? `<div class="card"><h3>Exemples</h3>${l.examples.map(e => `<p>${spk(plain(e[0]))} ${hl(e[0])}${e[1] ? `<br><span class="mut">${esc(e[1])}</span>` : ""}</p>`).join("")}</div>` : ""}
   <div class="card"><p>Faites les exercices <b>à voix haute</b> avant de taper la réponse. Puis écoutez le petit dialogue de Tex sur le même point :
    <a target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(l.subs[0].replace(/[«»]/g, "").split(/[;:(]/)[0].trim())}">Tex's French Grammar · ${esc(l.subs[0])}</a> · ${fiLink(l.fi)}</p></div>
-  <p class="row">${l.ex.length ? `<button class="b" onclick="startReview('lesson:${l.id}')">Pratiquer (${l.ex.length} exercices)</button>` : ""}
-  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>`;
+  ${l.ex.length ? `<div class="card"><h3>Exercices</h3><p class="mut">Une fois, à voix haute, puis comparez avec le corrigé.</p>${exSheet("g:" + l.id, l.ex)}</div>` : ""}
+  <p class="row">${saisieBtn("gram", l.n)}<span class="mut">Unité ${UNIT_OF.g[l.n] || "—"} du parcours</span></p>`;
   scrollTo(0, 0);
 };
-window.markLesson = id => { PLAN.filter(p => p.type === "lesson" && p.target === id).forEach(p => S.todo[p.id] = { done: true, at: Date.now() }); save(); go("today"); };
-window.markUnit = n => { PLAN.filter(p => p.type === "vocab" && p.target === n).forEach(p => S.todo[p.id] = { done: true, at: Date.now() }); save(); go("today"); };
-
 // ---------- Vocab ----------
 const wordState2 = v => { const c = card("v:" + v.id); return !c ? "nouveau" : c.interval >= 21 ? "✅ acquis" : c.lapses > 1 ? "⚠️ difficile" : "en cours"; };
 const frHTML = fr => { const g = window.genderOf ? genderOf(fr) : ""; return g ? `<span class="g-${g}">${esc(fr)}</span>` : esc(fr); };
@@ -286,7 +227,7 @@ window.openUnit = n => {
   view.innerHTML = `<p><a href="#" onclick="go('vocab');return false">← Vocabulaire</a></p>
   <div class="card"><span class="tag">Unité ${n}</span><h2>${esc(u.title)}</h2>
    <p class="mut" style="margin-top:0">Livre p. ${esc(u.bookPage || u.page)}</p>
-   <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button><button class="b s" onclick="markUnit(${n})">Marquer la séance comme terminée</button>${saisieBtn("vocab", n)}</p>
+   <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button>${saisieBtn("vocab", n)}</p>
    <p class="mut">🎧 = enregistrement original de Français interactif (toute la liste lue par un locuteur natif). 🔊 = un seul mot, voix française de votre appareil.</p></div>
   <div class="card"><h3>Vocabulaire progressif — les mots du livre</h3>${u.book.length ? `<div style="overflow-x:auto"><table>${u.book.map(wordRow).join("")}</table></div><p class="mut">🎧 sur la carte = le même mot dans Français interactif.</p>` : `<p>Pas encore saisis.</p>`}</div>
   <h2 style="margin:20px 0 8px">Français interactif — mots complémentaires</h2>` +
@@ -303,7 +244,7 @@ window.openSurvival = () => {
   view.innerHTML = `<p><a href="#" onclick="go('vocab');return false">← Vocabulaire</a></p>
   <div class="card"><span class="tag">Unité 0</span><h2>Kit de survie</h2>
    <p>Environ ${SURVIVAL.length} phrases qui couvrent les besoins de base (saluer, demander de répéter, acheter, commander, s'orienter, se loger, urgences). À apprendre <b>en premier</b>, comme des blocs entiers, et à dire à voix haute.</p>
-   <p class="row"><button class="b" onclick="startReview('unit:0')">Étudier le kit</button><button class="b s" onclick="markUnit(0)">Marquer la séance comme terminée</button></p></div>` +
+   <p class="row"><button class="b" onclick="startReview('unit:0')">Étudier le kit</button></p></div>` +
    cats.map(c => `<div class="card"><h3>${esc(c)}</h3><table>${SURVIVAL.filter(s => s.cat === c).map(wordRow).join("")}</table></div>`).join("");
   scrollTo(0, 0);
 };
@@ -315,30 +256,11 @@ function renderReviewHome() {
   <p>${due} cartes à réviser · ${newQuota()} nouvelles cartes disponibles aujourd'hui</p>
   <p class="row"><button class="b" onclick="startReview('due')">▶ Session du jour</button><button class="b s" onclick="startReview('mistakes')">Mes erreurs</button></p>
   <h3>Vocabulaire (unités)</h3><p class="row">${VP_UNITS.map(u => `<button class="b s" onclick="startReview('unit:${u.n}')">${u.n}. ${esc(u.title.split(" – ")[0])}</button>`).join("")}</p>
-  <h3>Grammaire — bilans</h3><p class="row">${BILANS.map((b, i) => `<button class="b s" onclick="startReview('bilan:${i}')">Bilan ${i + 1} (${b[0]}–${b[1]})</button>`).join("")}</p></div>`;
+</div>`;
 }
-function currentWeek() { return weekOf(dstr()); }
-// New cards are introduced in book order, only from units reached in the plan so far
-// and interleaved across lists, max 3 new per list per day, so related words (days, colours…) don't interfere
-const groupOf = id => ITEMS[id].kind === "g" ? "g" + ITEMS[id].l.id : "v" + ITEMS[id].v.sec;
 // new cards: the book's words before the Français interactif complements, each by frequency
 const rankOf = id => { const it = ITEMS[id]; if (it.kind !== "v") return 0; const r = (window.FREQ || {})[it.v.fr], f = r === undefined ? 5000 : r; return it.v.src === "livre" ? f - 1e5 : f; };
 const isPhrase = id => ITEMS[id].kind === "v" && /^(sv|cm|d_)/.test(ITEMS[id].v.id) && /\s/.test(ITEMS[id].v.fr);
-function newInPlanOrder() {
-  const groups = new Map(), t0 = new Date().setHours(0, 0, 0, 0), today = {}, T = dstr();
-  Object.entries(S.cards).forEach(([id, c]) => { if (c.first >= t0 && ITEMS[id]) today[groupOf(id)] = (today[groupOf(id)] || 0) + 1; });
-  const idsOf = p => p.type === "lesson" ? ALL.filter(id => id.startsWith("g:" + p.target + ":")) : p.type === "vocab" ? ALL.filter(id => ITEMS[id].unit === p.target) : p.type === "comm" ? ALL.filter(id => ITEMS[id].unit === "c" + p.target) : [];
-  const todays = PLAN.filter(p => (window.todayIds ? todayIds() : []).includes(p.id));
-  // 1) today's dialogue (whole sentences, no per-list cap) and today's grammar exercises
-  const first = todays.filter(p => p.type === "comm" || p.type === "lesson").flatMap(idsOf).filter(id => !card(id));
-  // 2) everything reached so far, max 3 new per list per day (related words interfere), by frequency
-  PLAN.filter(p => (window.isReached ? isReached(p.id) : true) && ["vocab", "comm", "lesson"].includes(p.type)).forEach(p => idsOf(p).filter(id => !card(id) && !first.includes(id)).forEach(id => { const g = groupOf(id); if (!groups.has(g)) groups.set(g, { today: todays.includes(p), ids: [] }); groups.get(g).ids.push(id); }));
-  const lists = [...groups.values()].map(g => ({ today: g.today, ids: g.ids.sort((a, b) => rankOf(a) - rankOf(b)), left: Math.max(0, 3 - (today[groupOf(g.ids[0])] || 0)) }));
-  lists.sort((a, b) => (b.today - a.today) || (rankOf(a.ids[0]) - rankOf(b.ids[0])));
-  const out = first.slice();
-  for (let round = 0; round < 3; round++) lists.forEach(l => { if (l.left > 0 && l.ids.length) { out.push(l.ids.shift()); l.left--; } });
-  return out;
-}
 function buildQueue(mode) {
   if (mode === "block" || mode === "blockmin") { // a card block: due cards + at most 20 new; no new cards when the backlog is large
     const due = dueIds().sort((a, b) => card(a).due - card(b).due);
@@ -359,8 +281,6 @@ function buildQueue(mode) {
     const n = mode.slice(5), ids = ALL.filter(id => String(ITEMS[id].unit) === n);
     return ids.filter(isDue).concat(shuffle(ids.filter(id => !card(id)))).concat(shuffle(ids.filter(id => card(id) && !isDue(id) && !isMature(id)))).slice(0, 25);
   }
-  if (mode.startsWith("bilan:")) { const b = BILANS[+mode.slice(6)]; return shuffle(ALL.filter(id => ITEMS[id].kind === "g" && ITEMS[id].l.n >= b[0] && ITEMS[id].l.n <= b[1])).slice(0, 20); }
-  if (mode.startsWith("lesson:")) return ALL.filter(id => id.startsWith("g:" + mode.slice(7) + ":"));
   if (mode.startsWith("ids:")) return mode.slice(4).split(",");
   return [];
 }
@@ -497,58 +417,6 @@ function renderHighlight() {
 }
 
 // ---------- Progress ----------
-function renderProgress() {
-  const seen = ALL.filter(id => card(id)).length, mat = ALL.filter(isMature).length;
-  const wk = S.sessions.filter(s => s.start > Date.now() - 7 * DAY && s.total), tot = wk.reduce((a, s) => a + s.total, 0), ok = wk.reduce((a, s) => a + s.correct, 0);
-  const secsToday = (S.daily[dstr()] || {}).secs || 0;
-  let heat = "";
-  for (let i = 89; i >= 0; i--) {
-    const d = dstr(Date.now() - i * DAY), m = ((S.daily[d] || {}).secs || 0) / 60, n = S.sessions.filter(s => dstr(s.start) === d).reduce((a, s) => a + s.total, 0);
-    const lv = n + m < 1 ? "" : n + m < 10 ? "l1" : n + m < 25 ? "l2" : "l3";
-    heat += `<span class="${lv}" title="${d}: ${n} cartes, ${Math.round(m)} min"></span>`;
-  }
-  const lv = l => { const ids = ALL.filter(id => ITEMS[id].level === l), m = ids.filter(isMature).length; return `<p>${l}: ${m}/${ids.length} acquis<div class="bar"><i style="width:${m / ids.length * 100}%"></i></div></p>`; };
-  const bad = ALL.filter(id => card(id) && card(id).lapses).sort((a, b) => card(b).lapses - card(a).lapses).slice(0, 15);
-  const nextDays = studyDays(dstr(), dAdd(dstr(), 9)).slice(0, 7), ex = S.exams || {};
-  const w10s = (S.writing || []).filter(x => x.mode === "fluency").slice(-12), wmax = Math.max(50, ...w10s.map(x => x.words));
-  view.innerHTML = progressOverview(dueIds().length, leeches().length, PLAN.filter(p => isDone(p.id)).length) + weeklyGoals() +
-  `<div class="card"><h3>Mon plan (7 prochains jours d'étude)</h3><p class="mut">Calculé à partir des dates de fin (A1 : ${fmtDate(cal().a1End)}, A2 : ${fmtDate(cal().a2End)}) et recalculé chaque jour.</p>
-   ${nextDays.map(d => { const items = PLAN.filter(p => p.date === d); return items.length ? `<details ${d === dstr() ? "open" : ""}><summary><b>${esc(fmtDate(d))}</b> <span class="mut">· ${items.length}</span></summary>${items.map(planItemHTML).join("")}</details>` : ""; }).join("")}
-   <p class="mut">${Object.keys(ex).length ? "Validation : " + Object.entries(ex).map(([l, e]) => `DELF ${l} — oral ${e.listen}/25 · écrits ${e.read}/25`).join(" · ") : ""}</p>
-   ${w10s.length > 1 ? `<p>Écriture rapide (mots en 10 min) :</p><svg width="260" height="70" style="background:var(--bg);border-radius:6px"><polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${w10s.map((x, i) => `${10 + i * 22},${62 - x.words / wmax * 54}`).join(" ")}"/></svg>` : ""}</div>` +
-  `<div class="card"><h2>Progrès</h2><div class="stats">
-   <div class="stat"><b>${streak()}</b>jours d'affilée</div><div class="stat"><b>${seen}/${ALL.length}</b>cartes vues</div>
-   <div class="stat"><b>${mat}</b>cartes acquises</div><div class="stat"><b>${tot ? Math.round(ok / tot * 100) + "%" : "—"}</b>exactitude 7 j</div>
-   <div class="stat"><b>${Math.round(secsToday / 60)}</b>min actives aujourd'hui</div></div>
-   ${(t => `<div class="stats" style="margin-top:10px">
-    <div class="stat"><b>${fmtDur(t.total)}</b>temps d'apprentissage total</div>
-    <div class="stat"><b>${fmtDur(t.week)}</b>cette semaine</div>
-    <div class="stat"><b>${t.active}</b>jours actifs</div>
-    <div class="stat"><b>${fmtDur(t.avg)}</b>en moyenne par jour actif</div></div>
-   <p class="mut">Temps actif uniquement (page ouverte et utilisée dans la dernière minute) + le temps ajouté à la main (TV5MONDE). Objectif A1 : environ ${Math.round(minutesPerDay() * 7 * new Set(PLAN.map(p => p.week)).size / 60)} h au total — vous en êtes à ${fmtDur(t.total)}.</p>`)(timeStats())}
-   ${lv("A1")}${lv("A2")}<h3>90 derniers jours</h3><div class="heat">${heat}</div></div>
-  ${strandBalance()}
-  <div class="card"><h3>Cartes à retravailler</h3>${bad.length ? `<table>${bad.map(id => { const it = ITEMS[id], c = card(id); return `<tr><td>${it.kind === "v" ? esc(it.v.fr + " — " + it.v.en) : esc(it.q + " → " + it.a)}</td><td>${c.lapses} erreur(s)</td><td>prochaine : ${dstr(c.due)}</td></tr>`; }).join("")}</table><p><button class="b" onclick="startReview('mistakes')">Revoir mes erreurs</button></p>` : `<p class="mut">Aucune erreur pour l'instant.</p>`}</div>
-  <div class="card"><h3>Historique des séances</h3><table><tr><th>Date</th><th>Type</th><th>Durée</th><th>Score</th></tr>${S.sessions.slice(-25).reverse().map(s => `<tr><td>${new Date(s.start).toLocaleString()}</td><td>${esc(s.label)}</td><td>${Math.max(1, Math.round((s.end - s.start) / 6e4))} min</td><td>${s.total ? s.correct + "/" + s.total : "—"}</td></tr>`).join("")}</table></div>`;
-}
-
-// Balance of Nation's four strands over the last 14 days, plus French-specific trackers
-function strandBalance() {
-  const days = Array.from({ length: 14 }, (_, i) => dstr(Date.now() - i * DAY));
-  const tot = STRANDS.map(([k, l]) => [l, days.reduce((a, d) => a + (((S.daily[d] || {}).st || {})[k] || 0), 0) / 60]);
-  const sum = tot.reduce((a, x) => a + x[1], 0) || 1;
-  const conj = Object.entries(S.conj || {}).filter(([, v]) => v.n >= 2).map(([k, v]) => [k.replace("|", " · ").replace(/· (\w+)$/, (m, t) => "· " + TENSES[t][0]), v.ok / v.n, v.n]).sort((a, b) => a[1] - b[1]).slice(0, 8);
-  const w10 = (S.writing || []).filter(x => x.mode === "fluency").slice(-10);
-  const dic = (S.dictee || []).slice(-10), dn = dic.reduce((a, x) => a + x.n, 0), dok = dic.reduce((a, x) => a + x.ok, 0);
-  return `<div class="card"><h3>Équilibre des 4 piliers (14 derniers jours)</h3><p class="mut">Objectif : environ 25 % chacun.</p>
-   ${tot.map(([l, m]) => `<p style="margin:4px 0">${l} : ${Math.round(m)} min · ${Math.round(m / sum * 100)} %<div class="bar"><i style="width:${m / sum * 100}%;${Math.abs(m / sum - 0.25) > 0.12 ? "background:#d9730d" : ""}"></i></div></p>`).join("")}</div>
-  <div class="card"><h3>Français : points spécifiques</h3>
-   <p><b>Conjugaisons à retravailler</b> ${conj.length ? "" : '<span class="mut">— pas encore assez de données</span>'}</p>${conj.length ? `<table>${conj.map(([k, r, n]) => `<tr><td>${esc(k)}</td><td>${Math.round(r * 100)} %</td><td class="mut">${n} essais</td></tr>`).join("")}</table><p><button class="b s" onclick="openConj()">S'entraîner</button></p>` : ""}
-   <p><b>Dictée</b> : ${dn ? Math.round(dok / dn * 100) + " % de mots justes (10 dernières)" : '<span class="mut">pas encore faite</span>'}</p>
-   <p><b>Écriture rapide 10 min</b> : ${w10.length ? w10.map(x => x.words).join(" → ") + " mots" : '<span class="mut">pas encore faite</span>'}</p>
-   <p><b>Genre éclair</b> : ${(S.genre || []).slice(-5).map(x => x.ok + "/" + x.n).join(" · ") || '<span class="mut">pas encore fait</span>'}</p></div>`;
-}
-
 // ---------- Sync ----------
 function merge(a, b) { // b merged into a
   for (const [id, c] of Object.entries(b.cards || {})) if (!a.cards[id] || (c.mod || 0) > (a.cards[id].mod || 0)) a.cards[id] = c;
@@ -573,6 +441,9 @@ function merge(a, b) { // b merged into a
   for (const k of ["writing", "talks", "dictee", "genre", "nombres"]) { const seen = new Set((a[k] || []).map(x => x.t)); a[k] = (a[k] || []).concat((b[k] || []).filter(x => !seen.has(x.t))).sort((x, y) => x.t - y.t); }
   a.conj = a.conj || {}; for (const [k, v] of Object.entries(b.conj || {})) if (!a.conj[k] || v.last > a.conj[k].last) a.conj[k] = v;
   a.cur = Math.max(a.cur || 1, b.cur || 1);
+  a.stepSecs = a.stepSecs || {}; for (const [k, v] of Object.entries(b.stepSecs || {})) a.stepSecs[k] = Math.max(a.stepSecs[k] || 0, v);
+  a.exAns = Object.assign({}, b.exAns || {}, a.exAns || {});
+  a.uwrite = a.uwrite || {}; for (const [k, e] of Object.entries(b.uwrite || {})) if (!a.uwrite[k] || (e.at || 0) > (a.uwrite[k].at || 0)) a.uwrite[k] = e;
   a.journal = a.journal || {}; for (const [d, e] of Object.entries(b.journal || {})) if (!a.journal[d] || (e.at || 0) > (a.journal[d].at || 0)) a.journal[d] = e;
   a.lastExport = Math.max(a.lastExport || 0, b.lastExport || 0);
   // the book content you entered: the most recent entry of each unit wins

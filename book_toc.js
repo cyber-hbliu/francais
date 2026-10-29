@@ -129,3 +129,31 @@ window.VTOC = [
   [26, "Le tourisme – Les voyages – Les vacances", 134], [27, "Les loisirs – Les sports – Les jeux", 140], [28, "Les arts – Les spectacles", 146],
 ];
 PDF_OFFSET.vocab = 0;
+
+// Editions: Grammaire progressive 3e éd. (2018) · Vocabulaire progressif 3e éd. (2017) · Communication progressive 2e éd. (2018) — all three A1.
+// The material at the back of the books (and the books' tests), as entries of their own: [id, book, title, first page, last page, CD tracks]
+// Only titles, pages and tracks are here; the text comes from your own import or entry, like the rest.
+window.EXTRAS = [
+  ["gannexe", "gram", "Annexes grammaticales", 152, 153, ""],
+  ["gconj", "gram", "Tableau des conjugaisons", 154, 157, ""],
+  ["gd158", "gram", "Activités communicatives · dialogues p. 158–160", 158, 160, ""],
+  ["gd161", "gram", "Activités communicatives · dialogues p. 161–162", 161, 162, ""],
+  ["gd163", "gram", "Activités communicatives · dialogues p. 163–164", 163, 164, ""],
+  ["gd165", "gram", "Activités communicatives · dialogues p. 165", 165, 165, ""],
+  ["gd166", "gram", "Activités communicatives · dialogues p. 166", 166, 166, ""],
+  ["gd167", "gram", "Activités communicatives · dialogues p. 167", 167, 167, ""],
+  ["gd168", "gram", "Activités communicatives · dialogues p. 168", 168, 168, ""],
+  ["gd169", "gram", "Activités communicatives · dialogues p. 169", 169, 169, ""],
+  ["gsong", "gram", "La grammaire en chantant", 170, 172, ""],
+  ["gtest", "gram", "Test d'évaluation (Grammaire)", 173, 173, ""],
+  ...GBILANS.map(([to, recap, bilan], i) => [`gb${i + 1}`, "gram", `Exercices récapitulatifs et bilan n° ${i + 1}`, recap, bilan, ""]),
+  ...Array.from({ length: 9 }, (_, i) => [`ca${i + 1}`, "comm", `Activités communicatives · dialogue ${i + 1}`, 122 + i, 122 + i, String(59 + i)]),
+  ["coral", "comm", "Exercices oraux", 131, 131, "68, 69"],
+  ["ctest", "comm", "Test d'évaluation (Communication)", 132, 136, ""],
+  ...Array.from({ length: 9 }, (_, i) => [`va${i + 1}`, "vocab", `Activités communicatives · texte ${i + 1}`, 150 + i, 150 + i, ""]),
+  ["vtest", "vocab", "Test d'évaluation (Vocabulaire)", 159, 163, ""],
+];
+// the nine points of the Annexes grammaticales, as the units refer to them
+window.ANNEXES = ["Les adverbes", "La place des adverbes", "La place de la négation", "La place des pronoms compléments", "L'impératif",
+  "Le discours direct et indirect", "Le passé récent", "Les pronoms démonstratifs", "Les pronoms possessifs"];
+window.VINDEX = [164, 177]; // Vocabulaire progressif: the Index (word, category, pages) — gives each unit its word list

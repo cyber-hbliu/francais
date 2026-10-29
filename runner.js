@@ -75,207 +75,17 @@ const capit = s => s.charAt(0).toUpperCase() + s.slice(1);
 const dayLong = d => capit(fmtDate(d));
 const dayShort = d => new Date(dParse(d)).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
 
-// ===================== blocks =====================
+// ===================== strands =====================
 const SC = { study: "#1F5BB0", input: "#0E7C6B", output: "#C2410C", fluency: "#6D3FC0", null: "#5B6168" };
 const SC_BG = { study: "#F2F6FC", input: "#EEF8F5", output: "#FFF7F2", fluency: "#F5F1FC", null: "#F1F3F5" };
 const STR_FR = { study: "Étude", input: "Écoute", output: "Production", fluency: "Fluidité" };
-// key: [name, strand, what it is, short label for the day's dots]
-const BLK = {
-  cards: ["Cartes", "study", "Les cartes à revoir, puis les nouvelles (d'abord celles du dialogue du jour). Dites la réponse à voix haute avant de retourner.", "Cartes"],
-  cardsMin: ["Cartes", "study", "Les cartes les plus urgentes.", "Cartes"],
-  dlgListen: ["Écoute du dialogue", "input", "Écoutez en lisant, deux fois : d'abord avec la traduction, puis sans. Ensuite, dites ce que raconte le dialogue.", "Écoute du dialogue"],
-  dlgMin: ["Écoute du dialogue", "input", "Une écoute du dialogue du jour, en lisant.", "Écoute du dialogue"],
-  gramA: ["Grammaire A", "study", "Le chapitre du jour : règle, exemples, exercices dits à voix haute, puis le petit dialogue de Tex.", "Grammaire A"],
-  gramB: ["Grammaire B", "study", "Le chapitre suivant (ou la conjugaison).", "Grammaire B"],
-  shadow: ["Répétition phrase par phrase", "output", "Écoutez l'original, répétez, puis réécoutez original, vous, original. Focus du premier passage : les finales muettes.", "Répétition"],
-  listenFI: ["Écoute libre", "input", "Français interactif sur le même thème, puis racontez en une ou deux phrases.", "Écoute libre"],
-  role: ["Jeu de rôle", "output", "L'ordinateur joue A, vous jouez B, puis on échange. Trois tours.", "Jeu de rôle"],
-  retell: ["Raconter 3/2/1½", "fluency", "Racontez le dialogue à la 3e personne, trois fois, de plus en plus vite. Tout est enregistré.", "Raconter 3/2/1½"],
-  relisten: ["Réécoute rapide", "fluency", "Les dialogues des jours précédents, à ×1,15 puis ×1,3.", "Réécoute rapide"],
-  write10: ["Écriture rapide", "fluency", "10 minutes sans s'arrêter, sur un sujet facile ; on compte les mots.", "Écriture rapide"],
-  rfi: ["Actualité en français facile", "input", "RFI, journal en français facile : écoutez, puis racontez une information.", "Actualité RFI"],
-  pho: ["Prononciation", "input", "Une leçon de prononciation de Français interactif : écouter, imiter, s'enregistrer.", "Prononciation"],
-  pho2: ["Prononciation", "input", "La leçon de prononciation suivante.", "Prononciation"],
-  weekly: ["Bilan de la semaine", null, "Vos minutes, vos mots et votre voix cette semaine.", "Bilan"],
-  roleReplay: ["Rejouer un jeu de rôle", "output", "Un jeu de rôle de la semaine, de nouveau.", "Jeu de rôle"],
-  roleReplay2: ["Rejouer un autre jeu de rôle", "output", "Un deuxième jeu de rôle de la semaine.", "Jeu de rôle"],
-  exam: ["Contrôle DELF", "input", "Sujet officiel : écoute et lecture, chronométrées ; notez votre score.", "DELF"]
-};
-// the day's blocks per phase, minutes at 160 min/day (scaled to the daily setting)
-const TPLS = {
-  w0: [["pho", 15], ["cards", 10], ["dlgListen", 15], ["gramA", 10], ["shadow", 15], ["pho2", 10], ["role", 10], ["retell", 5]],
-  w1: [["cards", 15], ["dlgListen", 15], ["gramA", 15], ["shadow", 15], ["gramB", 15], ["listenFI", 15], ["role", 10], ["retell", 10], ["relisten", 10]],
-  w2: [["cards", 15], ["dlgListen", 15], ["gramA", 20], ["shadow", 15], ["gramB", 20], ["listenFI", 20], ["role", 15], ["retell", 10], ["relisten", 10]],
-  A1: [["cards", 15], ["dlgListen", 20], ["gramA", 20], ["shadow", 20], ["gramB", 20], ["listenFI", 20], ["role", 15], ["retell", 20], ["relisten", 10]],
-  A2: [["cards", 15], ["dlgListen", 20], ["gramA", 20], ["shadow", 20], ["rfi", 20], ["role", 15], ["listenFI", 20], ["retell", 20], ["relisten", 10]],
-  sun: [["weekly", 5], ["cards", 15], ["roleReplay", 15], ["roleReplay2", 15]],
-  min: [["cardsMin", 10], ["dlgMin", 5]]
-};
-function tplFor(T) { const w = weekOf(T); return isSun(T) ? "sun" : w === 0 ? "w0" : w === 1 ? "w1" : w === 2 ? "w2" : T > cal().a1End ? "A2" : "A1"; }
-const RUN_V = 3;
-function makeRun(T, tpl) {
-  const ks = TPLS[tpl].map(x => x.slice()), dow = new Date(dParse(T)).getDay(), f = minutesPerDay() / 160;
-  const ri = ks.findIndex(x => x[0] === "relisten"); if (ri >= 0 && (dow === 2 || dow === 4)) ks[ri][0] = "write10";
-  if (tpl !== "min" && PLAN.some(p => p.type === "exam" && p.date === T && !isDone(p.id))) ks.splice(1, 0, ["exam", 50]);
-  return { v: RUN_V, tpl, blocks: ks.map(([k, m]) => ({ k, min: tpl === "min" ? m : Math.max(5, Math.round(m * f)), done: false, res: "" })), cur: null };
-}
-function run() {
-  const T = dstr(); S.run = S.run || {};
-  const r = S.run[T];
-  if (!r || (r.v !== RUN_V && !r.blocks.some(b => b.done))) { S.run[T] = makeRun(T, tplFor(T)); save(); }
-  return S.run[T];
-}
-// the retell block changes with the phase (self-introduction in week 0, « je » in week 1, 3rd person after)
-function blkName(k) { if (k !== "retell") return BLK[k][0]; const p = phase(); return p.retell.mode === "intro" ? "Me présenter" : "Raconter " + p.retell.secs.map(s => s >= 60 && s % 60 === 0 ? s / 60 : s >= 60 ? "1½" : s).join("/") + (p.retell.secs[0] >= 120 ? "" : " s"); }
-function blkLabel(k) { return k === "retell" ? blkName(k) : BLK[k][3]; }
-let RUN_ACTIVE = false, RUN_STATS = null, RUN_TICK = null;
+// the retelling changes with the unit (self-introduction first, « je », then the 3rd person)
+function blkName(k) { const p = phase(); return p.retell.mode === "intro" ? "Me présenter" : "Raconter " + p.retell.secs.map(s => s >= 60 && s % 60 === 0 ? s / 60 : s >= 60 ? "1½" : s).join("/") + (p.retell.secs[0] >= 120 ? "" : " s"); }
+// the old day of nine blocks is gone (one « what to do today »: the unit's steps); these hooks stay for the activities
+let RUN_ACTIVE = false, RUN_STATS = null;
 window.RUN_ACTIVE = false;
-const nextIdx = r => r.blocks.findIndex(b => !b.done);
-
-function day9HTML(r, curIdx) {
-  return `<div class="day9" style="grid-template-columns:repeat(${r.blocks.length},minmax(0,1fr))">${r.blocks.map((b, i) => { const c = SC[BLK[b.k][1]];
-    return `<div class="${i === curIdx ? "now" : ""}"><span class="c" title="${esc(blkName(b.k))} · ${b.min} min" style="${b.done ? `background:${c};border-color:${c}` : i === curIdx ? `border:3px solid ${c}` : ""}"></span><span class="l">${esc(blkLabel(b.k))}</span></div>`; }).join("")}</div>`;
-}
-const legendHTML = `<div class="legend">${["study", "input", "output", "fluency"].map(s => `<span><span class="dot" style="background:${SC[s]}"></span>${STR_FR[s]}</span>`).join("")}</div>`;
-// what the block will be about, in one line
-function blockSubtitle(k) {
-  const n = lessonOfDay(), c = COMM.find(x => x.n === n), k2 = sitOfDay(n);
-  if (/^(dlg|shadow|role|retell)/.test(k)) return k === "retell" && phase().retell.mode === "intro" ? "Avec les phrases du kit de survie" : `Communication ${n} · ${c.title} · ${c.dlgs[k2].sit}`;
-  if (k === "gramA" || k === "gramB") { const g = todayIds().map(id => PLAN.find(p => p.id === id)).filter(p => p && (p.type === "lesson" || p.type === "bilan"))[k === "gramA" ? 0 : 1]; return g ? g.title : "Conjugaison et révision"; }
-  if (k === "cards" || k === "cardsMin") { const d = dueIds().length, nn = Math.min(newQuota(), 20); return `${d > 150 ? "150+" : d} à revoir · ${d > 150 ? 0 : nn} nouvelles`; }
-  if (k === "pho" || k === "pho2" || k === "listenFI") { const ph = nextPlanItem(["pho"]); if (ph && k !== "listenFI" || ph && weekOf(dstr()) <= 1) return ph.title; const ls = nextPlanItem(["listen"]); return ls ? ls.title : ""; }
-  return "";
-}
-
-// ===================== Aujourd'hui =====================
-function renderToday() {
-  setView("today", null); document.body.classList.remove("focus"); RUN_ACTIVE = window.RUN_ACTIVE = false; hideBar();
-  const T = dstr(), r = run(), i = nextIdx(r), pr = projection(), st = streak(), n = lessonOfDay(), c = COMM.find(x => x.n === n), k2 = sitOfDay(n);
-  const total = r.blocks.reduce((a, b) => a + b.min, 0), doneMin = r.blocks.filter(b => b.done).reduce((a, b) => a + b.min, 0);
-  const minsToday = Math.round(((S.daily[T] || {}).secs || 0) / 60), due = dueIds().length;
-  const sundayExport = isSun(T) && (!S.lastExport || dstr(S.lastExport) !== T) && Object.keys(S.cards).length > 0;
-  let next;
-  if (i < 0) {
-    S.dayDone = S.dayDone || {}; if (!S.dayDone[T]) { S.dayDone[T] = true; save(); }
-    const nxt = nextPlanItem(["comm", "lesson", "vocab", "bilan"]);
-    next = `<section class="card nextblock" style="padding:32px"><div class="strand" style="color:${SC.study}"><span class="dot" style="background:${SC.study}"></span>Journée terminée</div>
-      <h1 style="margin:12px 0">Bravo, c'est fait pour aujourd'hui.</h1><p class="mut">${r.blocks.map(b => `${esc(blkName(b.k))} : ${esc(b.res || "fait")}`).join(" · ")}</p>
-      ${nxt ? `<details><summary class="mut">Encore de l'énergie ? Avancer d'une étape</summary><p><button class="b s" onclick="doPlan('${nxt.id}')">${esc(nxt.title)}</button></p></details>` : ""}</section>`;
-  } else {
-    const b = r.blocks[i], s = BLK[b.k][1], resume = r.cur && r.cur.idx === i, mins = resume ? Math.ceil(r.cur.left / 60) : b.min;
-    next = `<section class="card nextblock" aria-label="Bloc suivant" style="padding:32px;display:flex;flex-direction:column;gap:16px">
-      <div class="strand" style="color:${SC[s]}"><span class="dot" style="background:${SC[s]}"></span>Bloc ${i + 1} sur ${r.blocks.length} · ${STR_FR[s] || "Bilan"}</div>
-      <h1>${esc(blkName(b.k))}</h1>${blockSubtitle(b.k) ? `<p class="sub">${esc(blockSubtitle(b.k))}</p>` : ""}
-      <p style="margin:0;max-width:640px">${esc(BLK[b.k][2])}</p>
-      <div class="row" style="margin-top:8px;gap:12px"><button class="b big1" onclick="startBlock(${i})">${ICON.play}<span>${resume ? "Reprendre" : "Commencer"} · ${mins} min</span></button>
-      ${r.tpl !== "min" && r.tpl !== "sun" && !r.blocks.some(x => x.done) ? `<button class="b s" onclick="minDay()">Pas en forme ? Version 15 min</button>` : ""}</div></section>`;
-  }
-  const pend = pr.done ? `${pr.phase} terminé` : dayShort(pr.date);
-  const lesson = T < cal().w1 && !c ? "" : `<section class="card" aria-label="Leçon du jour" style="display:flex;flex-wrap:wrap;gap:32px">
-    <div style="flex:999 1 420px;min-width:0;display:flex;flex-direction:column;gap:10px"><h2 style="margin:0">Leçon du jour · Communication ${n} · ${esc(c.title)}</h2>
-     ${c.dlgs[k2].lines.length ? c.dlgs[k2].lines.slice(0, 3).map(l => `<p style="margin:0"><span style="font-weight:600;color:var(--mut)">${esc(l.who)} : </span>${esc(l.text)}</p>`).join("") : `<p style="margin:0">${esc(c.dlgs[k2].sit)} · livre p. ${c.dlgs[k2].page} <span class="tag">à saisir</span></p><div>${saisieBtn("comm", n)}</div>`}</div>
-    <div style="flex:1 1 240px;display:flex;flex-direction:column;gap:8px"><div style="font-size:13px;color:var(--mut)">Liée à cette leçon</div>
-     <div><span class="chip">Livre p. ${c.bookPages[0]}${c.bookPages[1] !== c.bookPages[0] ? "–" + c.bookPages[1] : ""}</span>${c.grammar.length ? `<span class="chip">Grammaire ${c.grammar.join(" · ")}</span>` : ""}${c.vocabUnits.length ? `<span class="chip">Vocabulaire ${c.vocabUnits.join(" · ")}</span>` : ""}<span class="chip">FI ch. ${String(c.fiChapter).padStart(2, "0")}</span></div></div></section>`;
-  view.innerHTML = (sundayExport ? `<div class="card" style="padding:16px 24px">💾 Dimanche : pensez à exporter votre sauvegarde. <button class="b s" onclick="go('sync')">Exporter</button></div>` : "") +
-    `<p class="sub">${dayLong(T)} · Semaine ${weekOf(T)} · Communication ${n}</p>` + next +
-    `<section class="card" aria-label="Ma journée" style="display:flex;flex-direction:column;gap:16px">
-      <div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">Ma journée</h2><span class="mut" style="font-variant-numeric:tabular-nums">${minsToday} / ${total} min</span></div>
-      ${day9HTML(r, i)}<div class="bar"><i style="width:${total ? doneMin / total * 100 : 0}%"></i></div>${legendHTML}</section>
-    <div class="stats"><div class="stat"><div class="k">Série</div><b>${st} jour${st > 1 ? "s" : ""}</b></div>
-      <div class="stat"><div class="k">Fin du ${pr.phase} prévue</div><b>${esc(pend)}</b>${pr.late ? `<button class="lnk" onclick="postponeWeek()">Décaler d'une semaine</button>` : ""}</div>
-      <div class="stat"><div class="k">Cartes à revoir aujourd'hui</div><b>${due > 150 ? "150+" : due}</b></div></div>` + lesson +
-    `<details class="mut"><summary>Pourquoi cette journée ?</summary><p>Chaque journée tourne autour d'un dialogue de Communication progressive : on l'écoute en lisant, on le répète phrase par phrase, on le joue, puis on le raconte (Nation : « linked skills », la dernière étape devient de la fluidité). Les blocs alternent les quatre piliers et ne dépassent pas 20 minutes. Les trois premières semaines, la journée grandit doucement : ${phase().total} min cette semaine.</p></details>`;
-}
-window.renderToday = renderToday;
-window.minDay = () => { const T = dstr(); S.run[T] = makeRun(T, "min"); save(); renderToday(); };
-
-// ===================== focus mode =====================
-function hideBar() { const b = $("#fbar"); if (b) b.remove(); if (RUN_TICK) clearInterval(RUN_TICK); RUN_TICK = null; }
-function drawBar() {
-  const r = run(), c = r.cur; if (!c) return;
-  const b = r.blocks[c.idx], s = BLK[b.k][1], left = Math.max(0, c.left), pct = 100 - left / (b.min * 60) * 100;
-  let el = $("#fbar"); if (!el) { el = document.createElement("div"); el.id = "fbar"; document.body.prepend(el); }
-  el.innerHTML = `<div class="top"><div class="left"><button class="b s" onclick="exitFocus()">Quitter</button><button class="lnk" onclick="skipBlock()">Passer</button></div>
-    <div class="strand" style="color:${SC[s]}"><span class="dot" style="background:${SC[s]}"></span>Bloc ${c.idx + 1} sur ${r.blocks.length} · ${STR_FR[s] || "Bilan"}</div>
-    <div class="clock">${left > 0 ? `<b>${mmss(left)}</b><span>restantes</span>` : `<b style="font-size:22px">Temps écoulé</b><span>finissez, puis terminez le bloc</span>`}<br><button class="lnk" onclick="completeBlock()">Terminer le bloc ✓</button></div></div>
-    <div class="prog"><i style="width:${pct}%;background:${SC[s]}"></i></div>`;
-}
-window.startBlock = idx => {
-  const r = run();
-  if (!r.cur || r.cur.idx !== idx) r.cur = { idx, left: r.blocks[idx].min * 60, acted: false };
-  save(); RUN_ACTIVE = window.RUN_ACTIVE = true; RUN_STATS = window.RUN_STATS = { cards: 0, recs: 0, sent: 0, rounds: 0 };
-  document.body.classList.add("focus"); drawBar();
-  if (RUN_TICK) clearInterval(RUN_TICK);
-  RUN_TICK = setInterval(() => { const c = run().cur; if (!c) return; if (document.visibilityState === "visible" && c.left > 0) { c.left--; if (c.left % 10 === 0) save(); if (c.left === 0 && c.acted) completeBlock(); } drawBar(); }, 1000);
-  launch(r.blocks[idx].k);
-};
-function blockAction() { if (!RUN_ACTIVE) return; const c = run().cur; if (!c) return; c.acted = true; save(); if (c.left <= 0) completeBlock(); }
+function blockAction() { }
 window.blockAction = blockAction;
-window.onQueueDone = () => blockAction();
-window.onPlanDone = () => blockAction();
-window.blockReturn = () => { // an activity went back to Today while a block is running
-  blockAction(); const c = run().cur; if (!c) return;
-  if (c.left <= 0) return completeBlock();
-  view.innerHTML = `<section class="card" style="padding:32px"><h1>Activité terminée</h1><p>Il reste ${Math.ceil(c.left / 60)} min dans ce bloc.</p>
-   <div class="row"><button class="b big1" onclick="launch(run().blocks[run().cur.idx].k)">${ICON.play}<span>Continuer</span></button><button class="b s" onclick="completeBlock()">Terminer le bloc</button></div></section>`;
-};
-function resultText(s) {
-  const p = [];
-  if (s.cards) p.push(s.cards + " cartes"); if (s.sent) p.push("répétition de " + s.sent + " phrase" + (s.sent > 1 ? "s" : "")); if (s.rounds) p.push(s.rounds + " tour" + (s.rounds > 1 ? "s" : ""));
-  if (s.recs) p.push(s.recs + " enregistrement" + (s.recs > 1 ? "s" : ""));
-  return p.join(" · ") || "fait";
-}
-window.completeBlock = () => {
-  const r = run(), c = r.cur; if (!c) return renderToday();
-  const b = r.blocks[c.idx]; b.done = true; b.res = resultText(RUN_STATS || {});
-  if (c.item && !isDone(c.item)) S.todo[c.item] = { done: true, at: Date.now() };
-  if (b.k === "retell" && c.sit) doneDialogue(c.sit[0], c.sit[1]);
-  r.cur = null; schedule(); save(); if (TURN_STOP) TURN_STOP(); stopActivity();
-  const i = nextIdx(r);
-  if (i < 0) { S.dayDone = S.dayDone || {}; S.dayDone[dstr()] = true; save(); }
-  hideBar();
-  const s = BLK[b.k][1];
-  view.innerHTML = `<section class="card" style="padding:32px;display:flex;flex-direction:column;gap:16px"><div class="strand" style="color:${SC[s]}"><span class="dot" style="background:${SC[s]}"></span>Bloc terminé</div>
-   <h1>${esc(blkName(b.k))}</h1><p style="margin:0;font-size:18px"><b>${esc(b.res)}</b></p>${day9HTML(r, i)}
-   ${i < 0 ? `<p>Tous les blocs du jour sont faits.</p><div><button class="b big1" onclick="exitFocus()">Terminer la journée</button></div>`
-    : `<p class="mut" style="margin:0">Ensuite : <b>${esc(blkName(r.blocks[i].k))}</b> · ${r.blocks[i].min} min</p><div class="row"><button class="b big1" onclick="startBlock(${i})">${ICON.play}<span>Bloc suivant</span></button><button class="b s" onclick="exitFocus()">Pause</button></div>`}</section>`;
-};
-window.skipBlock = () => { const r = run(), c = r.cur; if (!c) return; const [b] = r.blocks.splice(c.idx, 1); r.blocks.push(b); r.cur = null; save(); exitFocus(); };
-window.exitFocus = () => { if (TURN_STOP) TURN_STOP(); stopActivity(); RUN_ACTIVE = window.RUN_ACTIVE = false; document.body.classList.remove("focus"); hideBar(); renderToday(); };
-
-// what each block opens; c.item = the plan item it completes
-function launch(k) {
-  const r = run(), c = r.cur, T = dstr(), n = lessonOfDay();
-  const pick = (types, i) => todayIds().map(id => PLAN.find(p => p.id === id)).filter(p => p && types.includes(p.type))[i] || null;
-  REC_CTX = { kind: "libre", unit: null };
-  switch (k) {
-    case "cards": return startReview("block");
-    case "cardsMin": return startReview("blockmin");
-    case "dlgListen": case "dlgMin": return openComm(n, null, "listen", sitOfDay(n));
-    case "shadow": return openComm(n, null, "shadow", sitOfDay(n));
-    case "role": return openComm(n, null, "role", sitOfDay(n));
-    case "retell": c.sit = [n, sitOfDay(n)]; save(); return openComm(n, null, "retell", sitOfDay(n));
-    case "gramA": case "gramB": {
-      const g = pick(["lesson", "bilan"], k === "gramA" ? 0 : 1);
-      if (g) { c.item = g.id; save(); return g.type === "lesson" ? openLesson(g.target) : startReview("bilan:" + g.target); }
-      if (k === "gramA" && T > cal().a1End) return openDialogueGrammar(n);
-      return openConj();
-    }
-    case "listenFI": case "pho": case "pho2": {
-      const ph = pick(["pho"], k === "pho2" ? 1 : 0) || (k !== "listenFI" || weekOf(T) <= 1 ? nextPlanItem(["pho"]) : null);
-      if (ph) { c.item = ph.id; save(); return openPho(ph.target, ph.id); }
-      const ls = pick(["listen"], 0) || nextPlanItem(["listen"]); c.item = ls.id; save(); return openListen(ls.target, ls.id);
-    }
-    case "write10": return openEcrire("fluency");
-    case "relisten": return openRelisten();
-    case "rfi": return openRFI();
-    case "weekly": return openWeekly();
-    case "roleReplay": case "roleReplay2": { const w = weekRoles(); return openComm(w[k === "roleReplay" ? 0 : 1] || w[0] || n, null, "role"); }
-    case "exam": { const e = PLAN.find(p => p.type === "exam" && p.date === T && !isDone(p.id)); if (e) { c.item = e.id; save(); return openExam(e.target, e.id); } return startReview("block"); }
-  }
-}
-window.launch = launch;
-function weekRoles() { const ws = Date.now() - 7 * DAY, l = [...new Set((S.roles || []).filter(x => x.t >= ws).map(x => x.n))]; if (!l.length) l.push(...PLAN.filter(p => p.type === "comm" && isDone(p.id)).slice(-2).map(p => p.target)); return l; }
 
 // ===================== dialogue engine =====================
 const STOPW = new Set("le la les un une des du de d l au aux et ou en à a est sont suis es êtes sommes je tu il elle on nous vous ils elles me te se moi toi lui ce cet cette ces mon ma mes ton ta tes son sa ses notre nos votre vos leur leurs qui que quoi qu ne n pas plus oui non très bien merci bonjour pour par avec dans sur sous mais si y c ça cela voilà alors aussi donc comme quel quelle".split(" "));
@@ -480,19 +290,20 @@ function setupRetell() {
 
 // ===================== pages built on the engine =====================
 window.openComm = (n, planId, mode, k) => {
-  setView("comm", mode === "listen" ? "input" : mode === "retell" ? "fluency" : "output");
+  setView("comm", mode === "listen" ? "input" : mode === "retell" ? "fluency" : mode === "shadow" || mode === "phrases" ? "study" : "output");
   const c = COMM.find(x => x.n === n); track("comm", "Communication " + n);
   if (k === undefined || k >= c.dlgs.length) k = sitOfDay(n);
   const sitTabs = c.dlgs.length > 1 ? `<div class="row">${c.dlgs.map((d, j) => `<button type="button" class="pill ${j === k ? "on" : ""}" onclick="openComm(${n},null,'${mode || "listen"}',${j})">${(S.dlgDone || {})[n + "." + j] ? "✓ " : ""}Situation ${j + 1} · ${esc(d.sit)}</button>`).join("")}</div>` : "";
   // the book's recording, named by its CD track number (audio/comm/04.mp3)
   const trk = c.dlgs[k].track, audioSrc = /^\d+$/.test(trk) ? `audio/comm/${trk.padStart(2, "0")}.mp3` : "";
-  const chap = c.grammar.map(g => { const l = LESSONS.find(x => x.n === g), done = isDone("lesson:" + l.id);
-    return `<a href="#" onclick="openLesson('${l.id}');return false" class="chip" style="${done ? "background:#DFF3E7" : ""}">Grammaire ${g} · ${done ? "apprise" : "à mémoriser comme phrase"}</a>`; }).join("");
+  const chap = c.grammar.map(g => { const l = LESSONS.find(x => x.n === g), done = reachedLesson(g);
+    return `<a href="#" onclick="openLesson('${l.id}');return false" class="chip" style="${done ? "background:#DFF3E7" : ""}">Grammaire ${g} · ${done ? "apprise" : "unité " + UNIT_OF.g[g]}</a>`; }).join("")
+    + (c.annexes || []).map(i => `<span class="chip">Annexe ${i} · ${esc(ANNEXES[i - 1])}</span>`).join("");
   const tex = c.texTopics.map(t => `<a class="chip" target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(t)}">Tex : ${esc(t)}</a>`).join("");
   const voc = c.vocabUnits.map(u => `<a href="#" class="chip" onclick="openUnit(${u});return false">Vocabulaire ${u}</a>`).join("");
-  const focus = FOCUS[Math.max(0, weekOf(dstr())) % FOCUS.length];
+  const focus = FOCUS[(curUnit() - 1) % FOCUS.length];
   const info = `<div class="card lessoninfo" style="display:flex;flex-direction:column;gap:10px">
-    <p class="mut" style="margin:0">Point de correction de la semaine : <b style="color:var(--fg)">${esc(focus)}</b></p>
+    <p class="mut" style="margin:0">Point de correction de l'unité : <b style="color:var(--fg)">${esc(focus)}</b></p>
     <div><span class="chip">Livre p. ${c.bookPages[0]}–${c.bookPages[1]}</span><span class="chip">${c.level}</span>${chap}${tex}${voc}<a class="chip" target="_blank" rel="noopener" href="${FI_BASE}${String(c.fiChapter).padStart(2, "0")}/">FI ch. ${String(c.fiChapter).padStart(2, "0")}</a></div>
     ${sitTabs}
     ${audioSrc ? `<div id="bookaud" style="display:none"><p class="mut" style="margin:0 0 4px">Enregistrement du livre · piste ${esc(trk)} :</p><audio controls preload="metadata" src="${audioSrc}" style="width:100%" oncanplay="$('#bookaud').style.display=''" onerror="window.bookAudioFallback&&bookAudioFallback(this,'${audioSrc}')"></audio></div>` : ""}
@@ -505,7 +316,7 @@ window.openComm = (n, planId, mode, k) => {
   DP.sit = k;
   if (!RUN_ACTIVE) view.insertAdjacentHTML("beforeend", `<div class="card"><h3>Activité du livre</h3><p style="margin:0;white-space:pre-line">${esc(c.task || "Rejouez le dialogue du livre.")}</p></div>
     ${c.acts ? actsHTML(n, c.acts) : ""}
-    <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});go('today')">✓ Dialogue terminé</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
+    <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});stepFinish();go('today')">✓ Étape terminée</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
 };
 // A2 grammar block: the grammar of today's dialogue (chapters already studied, Tex for new points) + conjugation
 window.openDialogueGrammar = n => {
@@ -519,8 +330,8 @@ window.openDialogueGrammar = n => {
 };
 window.openRelisten = () => {
   setView("today", "fluency");
-  const recent = PLAN.filter(p => p.type === "comm" && (isDone(p.id) || Object.keys(S.dlgDone || {}).some(k => k.startsWith(p.target + "."))) && p.target !== lessonOfDay()).slice(-3).map(p => p.target);
-  const list = recent.length ? recent : [Math.max(1, lessonOfDay() - 1)];
+  const k = curUnit(), list = PARCOURS.slice(Math.max(0, k - 3), k - 1).flatMap(p => p.c);
+  if (!list.length) list.push(lessonOfDay());
   view.innerHTML = `<h1>Réécoute rapide</h1><p class="sub">Des dialogues déjà travaillés, plus vite : ×1,15 puis ×1,3. Le matériel est connu : on entraîne la vitesse.</p>
    <div class="card">${list.map(n => { const c = COMM.find(x => x.n === n); return `<div class="todo"><div style="flex:1"><b>${n}. ${esc(c.title)}</b></div><button class="b s" onclick="relisten(${n},1.15)">×1,15</button><button class="b s" onclick="relisten(${n},1.3)">×1,3</button></div>`; }).join("")}</div>`;
 };
@@ -547,13 +358,13 @@ window.openWeekly = async () => {
   const ws = weekStart(), days = Array.from({ length: 7 }, (_, i) => dstr(ws + i * DAY + 3e6));
   const mins = STRANDS.map(([k], i) => [["Étude", "Écoute", "Production", "Fluidité"][i], days.reduce((a, d) => a + strandMin(d, k), 0), k]);
   const newW = Object.values(S.cards).filter(c => c.first >= ws).length;
-  const nw = studyDays(dAdd(dstr(), 1), dAdd(dstr(), 7)), next = PLAN.filter(p => nw.includes(p.date) && ["comm", "lesson"].includes(p.type));
+  const k = curUnit(), next = PARCOURS.slice(k - 1, k + 2).map((p, i) => ({ date: "", title: `Unité ${k + i} · ` + p.c.map(n => COMM[n - 1].title).join(" · ") }));
   REC_CTX = { kind: "intro", unit: null };
   view.innerHTML = `<h1>Bilan de la semaine</h1>
    <div class="stats">${mins.map(([l, m, k]) => `<div class="stat"><div class="k" style="color:${SC[k]}">${l}</div><b>${m} min</b></div>`).join("")}<div class="stat"><div class="k">Nouveaux mots et phrases</div><b>${newW}</b></div></div>
    <div class="card"><h2>Ma voix cette semaine</h2><p>Présentez-vous en une minute, comme le premier jour (on compare dans Mes progrès) : ${recWidget("wkintro")}</p>
     <h3>Premier et dernier récit de la semaine</h3><div id="wkrec" class="mut">Chargement…</div></div>
-   <div class="card"><h2>La semaine prochaine</h2>${next.map(p => `<div class="todo"><span class="mut" style="min-width:150px">${esc(capit(fmtDate(p.date)))}</span><span>${esc(p.title)}</span></div>`).join("") || "<p class='mut'>—</p>"}</div>`;
+   <div class="card"><h2>La semaine prochaine</h2>${next.map(p => `<div class="todo"><span>${esc(p.title)}</span></div>`).join("") || "<p class='mut'>—</p>"}</div>`;
   blockAction();
   try {
     const recs = (await recAll()).filter(r => r.kind === "retell" && r.t >= ws);
@@ -571,7 +382,7 @@ window.hmSel = async d => {
   document.querySelectorAll(".hm .cells button").forEach(b => b.classList.toggle("sel", b.dataset.d === d));
   const el = $("#hmsel"); if (!el) return;
   if (d < cal().start) { el.innerHTML = `<b>${dayLong(d)}</b> · pas encore commencé, début le 28 octobre`; return; }
-  const m = dayMin(d), r = (S.run || {})[d], cards = S.sessions.filter(s => dstr(s.start) === d).reduce((a, s) => a + (s.type === "review" ? s.total : 0), 0);
+  const m = dayMin(d), r = null, cards = S.sessions.filter(s => dstr(s.start) === d).reduce((a, s) => a + (s.type === "review" ? s.total : 0), 0);
   el.innerHTML = `<b>${dayLong(d)}</b> · ${m} min · ${HM_WORD[hmLevel(m)]}${cards ? ` · ${cards} carte${cards > 1 ? "s" : ""}` : ""}
     ${r && r.blocks.some(b => b.done) ? `<br><span class="mut">${r.blocks.filter(b => b.done).map(b => esc(blkName(b.k)) + (b.res && b.res !== "fait" ? " (" + esc(b.res) + ")" : "")).join(" · ")}</span>` : ""}<span id="hmrec"></span>`;
   try { const recs = (await recAll()).filter(x => x.date === d); const rr = $("#hmrec"); if (rr && recs.length) rr.innerHTML = `<br>${recs.slice(-6).map(x => `<span class="mut">${REC_KIND[x.kind] || x.kind} ${mmss(x.dur || 0)}</span> <audio controls preload="none" src="${URL.createObjectURL(x.blob)}" style="height:32px;vertical-align:middle"></audio>`).join(" ")}`; } catch (e) { }
@@ -611,29 +422,27 @@ async function voiceCompare() {
   const el = $("#voicebox"); if (!el) return;
   try {
     const recs = await recAll(); let pool = recs.filter(r => r.kind === "intro"); if (pool.length < 1) pool = recs.filter(r => r.kind === "talk");
-    if (!pool.length) { el.innerHTML = `<p class="mut">Pas encore d'enregistrement. Le premier « Me présenter » se fait dans le bloc de la semaine 0, puis chaque dimanche.</p>`; return; }
+    if (!pool.length) { el.innerHTML = `<p class="mut">Pas encore d'enregistrement. Le premier « Me présenter » se fait à l'étape Fluidité de l'unité 1, puis dans le bilan de chaque dimanche.</p>`; return; }
     const a = pool[0], b = pool[pool.length - 1], row = (r, now, label) => { VOICE_A[r.id] = new Audio(URL.createObjectURL(r.blob)); const lp = r.longPauses ?? r.pauses ?? 0;
       return `<div class="voice ${now ? "now" : ""}"><button type="button" onclick="playVoice('${r.id}',this)" aria-label="Écouter l'enregistrement du ${esc(dayShort(r.date))}">${ICON.play}</button><div style="display:flex;flex-direction:column"><span style="font-weight:600">${esc(label)}</span><span class="mut" style="font-size:14px">${mmss(r.dur || 0)} · ${lp ? lp + " longue" + (lp > 1 ? "s" : "") + " pause" + (lp > 1 ? "s" : "") : "aucune longue pause"}</span></div></div>`; };
     el.innerHTML = row(a, false, `${dayShort(a.date)} · jour ${studyDays(cal().start, a.date).length || 1}`) + (b !== a ? row(b, true, `${dayShort(b.date)}${b.date === dstr() ? " · aujourd'hui" : ""}`) : "");
   } catch (e) { el.innerHTML = `<p class="mut">Enregistrements indisponibles dans ce navigateur.</p>`; }
 }
 function renderProgress() {
-  const pr = projection(), t = timeStats(), st = streak(), ex = S.exams || {};
-  const nextExam = PLAN.filter(p => p.type === "exam").sort((a, b) => a.date < b.date ? -1 : 1).find(p => !isDone(p.id)) || PLAN.filter(p => p.type === "exam").pop();
-  const daysTo = Math.round((dParse(nextExam.date) - dParse(dstr())) / DAY), lv = nextExam.target, sc = ex[lv];
+  const t = timeStats(), st = streak(), ex = S.exams || {}, lv = "A1", sc = ex[lv], k = curUnit();
   const conj = Object.entries(S.conj || {}).filter(([, v]) => v.n >= 2).map(([k, v]) => [k.replace("|", " · ").replace(/· (\w+)$/, (m, x) => "· " + TENSES[x][0]), v.ok / v.n]).sort((a, b) => a[1] - b[1]).slice(0, 6);
   const bad = ALL.filter(id => card(id) && card(id).lapses).sort((a, b) => card(b).lapses - card(a).lapses).slice(0, 8);
   const w10 = (S.writing || []).filter(x => x.mode === "fluency").slice(-12), wmax = Math.max(50, ...w10.map(x => x.words));
-  const nextDays = studyDays(dstr(), dAdd(dstr(), 9)).slice(0, 7);
   view.innerHTML = `<h1>Mes progrès</h1>${heatmapHTML()}
    <div class="stats"><div class="stat"><div class="k">Série</div><b>${st} jour${st > 1 ? "s" : ""}</b></div><div class="stat"><div class="k">Temps total</div><b>${fmtDur(t.total)}</b></div>
-    <div class="stat"><div class="k">Fin du ${pr.phase} prévue</div><b>${pr.done ? "terminé" : esc(dayShort(pr.date))}</b></div></div>
+    <div class="stat"><div class="k">Unité</div><b>${k} / 30</b></div></div>
+   <section class="card"><p style="margin:0">${unitPace()}</p><h3 style="margin-top:14px">Les quatre piliers cette semaine</h3>${strandWeek()}</section>
    <div class="row" style="gap:16px;align-items:stretch">${pillarsHTML()}
     <section class="card" aria-label="Mes enregistrements" style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:14px"><div><h2 style="margin:0">Ma voix, jour 1 et aujourd'hui</h2><p class="mut" style="margin:0;font-size:14px">Le même exercice : me présenter en français</p></div>
      <div id="voicebox" style="display:flex;flex-direction:column;gap:12px"><p class="mut">Chargement…</p></div><a href="#" onclick="go('recs');return false" style="font-size:15px">Tous mes enregistrements</a></section></div>
    <section class="card" aria-label="Contrôle DELF" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding:20px 32px">
-    <div><h2 style="margin:0">Contrôle DELF ${lv} · ${esc(fmtDate(nextExam.date))}</h2><p class="mut" style="margin:0;font-size:15px">${sc ? `Score : ${sc.listen} sur 25 à l'écoute et ${sc.read} sur 25 à la lecture (objectif ${EXAM_GOAL[lv]})` : `Objectif : ${EXAM_GOAL[lv]} sur 25 à l'écoute et ${EXAM_GOAL[lv]} sur 25 à la lecture`}</p></div>
-    <span class="chip" style="margin:0">${isDone(nextExam.id) ? "fait" : daysTo > 0 ? `Dans ${daysTo} jour${daysTo > 1 ? "s" : ""}` : "Aujourd'hui"}</span></section>
+    <div><h2 style="margin:0">Contrôle DELF A1 · à l'unité 30</h2><p class="mut" style="margin:0;font-size:15px">${sc ? `Score : ${sc.listen} sur 25 à l'écoute et ${sc.read} sur 25 à la lecture (objectif ${EXAM_GOAL[lv]})` : "Avec les tests d'évaluation des trois livres, après la dernière unité."}</p></div>
+    <span class="chip" style="margin:0">${k >= 30 ? "maintenant" : "dans " + (30 - k) + " unité" + (30 - k > 1 ? "s" : "")}</span></section>
    ${Object.keys(ex).length ? `<p class="mut" style="margin:0">Scores enregistrés : ${Object.entries(ex).map(([l, e]) => `DELF ${l} — écoute ${e.listen}/25 · lecture ${e.read}/25`).join(" · ")}</p>` : ""}
    <div class="row" style="gap:16px;align-items:stretch">
     <section class="card" style="flex:1 1 420px;min-width:0"><h2>À retravailler</h2>
@@ -643,8 +452,6 @@ function renderProgress() {
     <section class="card" style="flex:1 1 420px;min-width:0"><h2>Écriture rapide</h2><p class="mut" style="margin:0">Mots écrits en 10 minutes</p>
      ${w10.length > 1 ? `<svg width="100%" height="90" viewBox="0 0 ${Math.max(2, w10.length - 1) * 30 + 20} 90" preserveAspectRatio="none" role="img" aria-label="Mots par séance" style="background:var(--chip);border-radius:8px;margin-top:8px"><polyline fill="none" stroke="${SC.fluency}" stroke-width="2" points="${w10.map((x, i) => `${10 + i * 30},${82 - x.words / wmax * 72}`).join(" ")}"/></svg><p class="mut">${w10.map(x => x.words).join(" → ")}</p>` : `<p class="mut">Le mardi et le jeudi, à la place de la réécoute rapide.</p>`}</section></div>
    ${weeklyGoals()}
-   <section class="card"><h2>Mon plan · 7 prochains jours d'étude</h2><p class="mut" style="margin:0">Calculé à partir des dates de fin (A1 : ${esc(fmtDate(cal().a1End))}, A2 : ${esc(fmtDate(cal().a2End))}) et recalculé chaque jour.</p>
-    ${nextDays.map(d => { const items = PLAN.filter(p => p.date === d); return items.length ? `<details ${d === dstr() ? "open" : ""}><summary><b>${esc(capit(fmtDate(d)))}</b> <span class="mut">· ${items.length}</span></summary>${items.map(planItemHTML).join("")}</details>` : ""; }).join("")}</section>
    <details class="card"><summary><b>Historique des séances</b></summary><table>${S.sessions.slice(-25).reverse().map(s => `<tr><td>${new Date(s.start).toLocaleString("fr-FR")}</td><td>${esc(s.label)}</td><td>${Math.max(1, Math.round((s.end - s.start) / 6e4))} min</td><td>${s.total ? s.correct + "/" + s.total : "—"}</td></tr>`).join("")}</table></details>`;
   hmSel(dstr()); voiceCompare();
 }

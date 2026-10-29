@@ -3,17 +3,18 @@
 // adapted to French: sounds/spelling, gender, conjugation, dictation.
 
 // ---------- helpers ----------
-// "reached" = done, or scheduled for today or earlier (planner.js)
-const reachedLesson = n => isReached("lesson:g" + String(n).padStart(2, "0"));
-const reachedVocab = n => isReached("vocab:" + n);
-const reachedComm = n => isReached("comm:" + n);
+// "reached" = in the current unit or an earlier one (units.js)
+const reachedIn = (m, n) => !!window.UNIT_OF && (UNIT_OF[m][n] || 99) <= curUnit();
+const reachedLesson = n => n === 0 || reachedIn("g", n);
+const reachedVocab = n => reachedIn("v", n);
+const reachedComm = n => reachedIn("c", n);
 const dayIndex = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / DAY);
 const minutesPerDay = () => S.settings.minutes || 40;
 const strandMin = (d, k) => Math.round((((S.daily[d] || {}).st || {})[k] || 0) / 60);
 window.logMinutes = (k, m) => { addDay(null, m * 60, k); addDay("secs", m * 60); save(); go(tab === "today" ? "today" : tab); };
 const STRANDS = [["study", "📘 Étude ciblée"], ["input", "🎧 Écoute & lecture"], ["output", "🗣️ Production"], ["fluency", "⚡ Fluidité"]];
 function setView(t, strand) { stopActivity(); tab = t; curStrand = strand; document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === t)); scrollTo(0, 0); }
-const back = `<p><a href="#" onclick="go('today');return false">← Aujourd'hui</a></p>`;
+const back = `<p><a href="#" onclick="go('today');return false">← Mon unité</a></p>`;
 let TIMER = null;
 function stopActivity() { if (TIMER) clearInterval(TIMER); TIMER = null; if (window.speechSynthesis) speechSynthesis.cancel(); if (rec && rec.state === "recording") rec.stop(); }
 window.stopActivity = stopActivity;
@@ -75,7 +76,10 @@ const byInf = inf => VERBS.find(v => v.inf === inf);
 function conjForm(v, t, p) { // returns the form without the subject (with reflexive pronoun), plus accepted variants
   const r = v.refl ? RPRO[p] : null, withR = w => r ? elide(r, w) : w;
   if (t === "pres") return [withR(v.pres[p])];
-  if (t === "imp") { const st = v.inf === "être" ? "ét" : v.pres[3].replace(/ons$/, ""); return [withR(st + ["ais", "ais", "ait", "ions", "iez", "aient"][p])]; }
+  if (t === "imp") { // stem of « nous » in the present; -ger and -cer verbs drop their e / ç before -ions, -iez (mangions, commencions)
+    let st = v.inf === "être" ? "ét" : v.pres[3].replace(/ons$/, "");
+    if (p === 3 || p === 4) st = st.replace(/ge$/, "g").replace(/ç$/, "c");
+    return [withR(st + ["ais", "ais", "ait", "ions", "iez", "aient"][p])]; }
   if (t === "fut") return [withR(v.fut + ["ai", "as", "a", "ons", "ez", "ont"][p])];
   if (t === "fp") return [byInf("aller").pres[p] + " " + (r ? elide(r, v.base) : v.base)];
   // passé composé
@@ -105,7 +109,7 @@ function pickConj(n) { // adaptive: weak and less-practised (verb, tense) pairs 
 window.openConj = () => {
   setView("today", "study");
   const q = pickConj(12);
-  if (!q.length) { view.innerHTML = back + `<div class="card"><h2>Conjugaison</h2><p>Les conjugaisons s'ouvrent avec l'unité 4 (« être »). Continuez le plan !</p></div>`; return; }
+  if (!q.length) { view.innerHTML = back + `<div class="card"><h2>Conjugaison</h2><p>Les conjugaisons s'ouvrent avec le chapitre 4 de la grammaire (« être »), à l'unité ${UNIT_OF.g[4]}.</p></div>`; return; }
   let i = 0, ok = 0, firstWrong = new Set();
   const n0 = q.length;
   const draw = () => {
@@ -249,9 +253,8 @@ window.openEclair = () => {
 // topic of the day = today's Communication lesson (its first vocabulary unit gives the speaking prompt);
 // before week 1, or every other day, a prepared talk about Bing's own life (Nation 4.3)
 function weekTopic() {
-  const T = dstr(), c = T < cal().w1 ? null : COMM.find(x => x.n === lessonOfDay());
-  const g = PLAN.filter(p => p.type === "lesson" && isReached(p.id)).pop();
-  const gram = g ? LESSONS.find(l => l.id === g.target) : LESSONS[0];
+  const k = curUnit(), c = k < 2 ? null : COMM.find(x => x.n === lessonOfDay());
+  const gs = PARCOURS.slice(0, k).flatMap(p => p.g), gram = LESSONS[(gs[gs.length - 1] || 1) - 1];
   if (!c) return { n: 0, title: "Kit de survie", prompt: PROMPTS[0], gram };
   const perso = PERSO[dayIndex() % PERSO.length], n = c.vocabUnits[0] || 0;
   return dayIndex() % 2 ? { n, title: c.title, prompt: PROMPTS[n] || PROMPTS[0], gram } : { n: "p" + (dayIndex() % PERSO.length), title: "Ma vie", prompt: perso, gram };
@@ -302,74 +305,27 @@ window.openEcrire = (mode) => {
 
 // ---------- pronunciation (Français interactif recordings) ----------
 window.openPho = (n, planId) => {
-  setView("today", "input");
+  setView("today", "study"); // Nation: pronunciation is language-focused learning
   const p = FI_PHO[n - 1]; track("pho", "Prononciation " + n);
   view.innerHTML = back + `<div class="card"><span class="tag">Prononciation ${n}/13</span><span class="tag">Français interactif</span><h2>${esc(p.title)}</h2>
    <p class="mut">Écoutez, imitez à voix haute (« shadowing »), enregistrez-vous et comparez. Les sons difficiles pour un sinophone : /y/ ≠ /u/ (tu ≠ tout), le /R/, les voyelles nasales, le e muet, la liaison.</p>
    <p style="white-space:pre-line">${esc(p.intro.split("\n").slice(1).join("\n"))}</p></div>` +
     p.items.map((it, k) => `<div class="card"><audio controls preload="none" src="${it.u}" style="width:100%"></audio>
      <p style="white-space:pre-line">${esc(it.t)}</p><p>${recWidget("ph" + k)}</p></div>`).join("") +
-    `<p class="row">${planId ? `<button class="b ok" onclick="toggleTodo('${planId}',true);go('today')">✓ Leçon terminée</button>` : ""}<a target="_blank" rel="noopener" href="https://www.laits.utexas.edu/fi/html/pho/${String(n).padStart(2, "0")}.html">Page originale</a></p>`;
+    `<p class="row"><button class="b ok" onclick="S.ustep=S.ustep||{};S.ustep[curUnit()+':pho1']=Date.now();save();go('today')">✓ Leçon terminée</button><a target="_blank" rel="noopener" href="https://www.laits.utexas.edu/fi/html/pho/${String(n).padStart(2, "0")}.html">Page originale</a></p>`;
 };
 
 // ---------- repeated listening at rising speed (Nation 6.1) ----------
 window.openReecoute = () => {
   setView("today", "fluency");
-  const done = PLAN.filter(p => p.type === "listen" && S.todo[p.id] && S.todo[p.id].done).map(p => p.target);
-  const i = done.length ? done[Math.random() * done.length | 0] : 0, x = FI_LISTEN[i];
+  const i = Math.random() * Math.min(FI_LISTEN.length, 4 + curUnit() * 2) | 0, x = FI_LISTEN[i]; // optional supplement: FI recordings
   view.innerHTML = back + `<div class="card"><h2>Réécoute accélérée ⚡</h2><p class="mut">Un enregistrement déjà travaillé, trois fois, de plus en plus vite. Le matériel est connu : on entraîne la vitesse de compréhension.</p>
    <p><b>${esc(x.t)}</b> <span class="mut">(FI ch. ${String(x.ch).padStart(2, "0")})</span></p><audio id="ra" controls preload="none" src="${x.u}" style="width:100%"></audio>
    <p class="row">${[0.9, 1, 1.15, 1.3].map(r => `<button class="b s" onclick="const a=$('#ra');a.playbackRate=${r};a.currentTime=0;a.play()">×${r}</button>`).join("")}</p>
    <p class="row"><button class="b ok" onclick="track('reecoute','Réécoute',true);go('today')">✓ Terminé</button></p></div>`;
 };
 
-// ---------- the guided daily session ----------
-function nextPlanItem(types) { return PLAN.filter(p => types.includes(p.type) && !isDone(p.id)).sort((a, b) => (a.date || "9") < (b.date || "9") ? -1 : 1)[0]; }
-const goBtn = (p, cls = "b s") => p ? `<button class="${cls}" onclick="doPlan('${p.id}')">${esc(p.title.length > 60 ? p.title.slice(0, 58) + "…" : p.title)}</button>` : "";
-// One clear action per step; alternatives and the reason are folded away.
-const FLU = { "openGenre()": "Genre éclair : le ou la ? (60 s)", "openNombres()": "Nombres à l'oreille", "openEclair()": "Révision éclair des mots connus (90 s)", "openParler('fluency')": "Parler 3 / 2 / 1½ min", "openEcrire('fluency')": "Écriture rapide 10 min", "openReecoute()": "Réécoute accélérée" };
-function dailySession() {
-  const d = dstr(), M = minutesPerDay(), T = Math.round(M / 4), di = dayIndex();
-  const due = dueIds().length, nq = Math.min(newQuota(), newInPlanOrder().length);
-  const obj = S.settings.objective || "parler", wt = weekTopic();
-  const hasVerbs = conjPairs().length > 0;
-  const drill = hasVerbs && di % 2 === 0 ? ["openConj()", "🔤 Conjugaison (12)"] : ["openDictee()", "✏️ Dictée (5 phrases)"];
-  const lesson = nextPlanItem(["lesson", "vocab", "bilan"]), listen = nextPlanItem(["listen"]), pho = nextPlanItem(["pho"]);
-  const speakDay = obj === "ecrit" ? di % 3 === 0 : di % 3 !== 2, comm = nextPlanItem(["comm", "cbilan"]);
-  const flu = [["openGenre()", nounPool().length >= 8], ["openNombres()", true], ["openEclair()", ALL.filter(id => card(id) && card(id).reps >= 2).length >= 10],
-    ["openParler('fluency')", true], ["openEcrire('fluency')", true], ["openReecoute()", PLAN.some(p => p.type === "listen" && S.todo[p.id] && S.todo[p.id].done)]].filter(x => x[1]).map(x => x[0]);
-  const f = flu[di % flu.length];
-  const btn = (on, label, main) => `<button class="${main ? "b" : "b s"}" onclick="${on}" ${main ? 'style="font-size:17px;padding:10px 18px"' : ""}>${label}</button>`;
-  const planBtn = p => p ? btn(`doPlan('${p.id}')`, esc(p.title.length > 48 ? p.title.slice(0, 46) + "…" : p.title)) : "";
-  // listening: a player right on the page (pronunciation lesson first in the early weeks, then FI listening)
-  const p0 = pho && FI_PHO[pho.target - 1].items[0];
-  const rec = pho ? { u: p0.u, t: `Prononciation ${pho.target} : ${FI_PHO[pho.target - 1].title}`, words: p0.t.split("\n").slice(0, 6).join(" · "), open: `doPlan('${pho.id}')`, more: "Ouvrir la leçon complète" }
-    : listen ? { u: FI_LISTEN[listen.target].u, t: listen.title, words: "", open: `doPlan('${listen.id}')`, more: "Ouvrir l'écoute" } : null;
-  const step = (n, k, title, main, others) => { const m = strandMin(d, k), ok = m >= T;
-    return `<div class="todo" style="display:block;padding:12px 0">
-      <div class="row" style="justify-content:space-between"><b style="font-size:17px">${ok ? "✅" : n + "."} ${title}</b><span class="mut">${m} / ${T} min</span></div>
-      <div class="bar" style="margin:6px 0 10px"><i style="width:${Math.min(100, m / T * 100)}%"></i></div>
-      <div>${main}</div>
-      <details style="margin-top:8px"><summary class="mut" style="cursor:pointer">Autres choix · pourquoi cette étape</summary>
-        <p class="mut" style="margin:6px 0">${WHY[k]}</p><div class="row">${others}</div></details></div>`; };
-  return `<div class="card"><h2>Séance du jour · ${M} min</h2>
-   <p class="mut">Faites les 4 étapes dans l'ordre, environ ${T} min chacune. Cliquez sur le grand bouton ; le temps est compté automatiquement et l'étape se coche toute seule.</p>
-   ${step(1, "study", "Étude : mots et grammaire",
-      due + nq ? btn("startReview('due')", `▶ Cartes du jour : ${due} à revoir + ${nq} nouvelles`, true) : lesson ? btn(`doPlan('${lesson.id}')`, "▶ Leçon suivante : " + esc(lesson.title.slice(0, 40)), true) : btn(drill[0], drill[1], true),
-      btn(drill[0], drill[1]) + planBtn(lesson))}
-   ${step(2, "input", "Écoute : enregistrements natifs",
-      rec ? `<p style="margin:0 0 6px"><b>${esc(rec.t)}</b></p>${rec.words ? `<p class="mut" style="margin:0 0 6px">Dans l'enregistrement : ${esc(rec.words)}</p>` : ""}<audio controls preload="none" src="${rec.u}" style="width:100%" onplay="curStrand='input'" onpause="curStrand=null"></audio>
-        <p class="row" style="margin-top:8px">${btn(rec.open, "▶ " + rec.more, true)}</p>` : btn(`openUnit(${wt.n})`, "▶ Lire en écoutant : " + esc(wt.title), true),
-      (listen && pho ? planBtn(listen) : "") + (wt.n ? btn(`openUnit(${wt.n})`, "📖🎧 Lire en écoutant : vocabulaire de la semaine") : btn("openSurvival()", "📖 Kit de survie")) + btn("window.open(TV5,'_blank');logMinutes('input',10)", "TV5MONDE (+10 min)"))}
-   ${step(3, "output", "Production : parler ou écrire",
-      comm && speakDay ? btn(`doPlan('${comm.id}')`, "🎭 Jeu de rôle · " + esc(comm.title), true) : speakDay ? btn("openParler('output')", "🗣️ Parler : mon petit texte sur le thème de la semaine", true) : btn("openEcrire('output')", "✍️ Écrire : thème et grammaire de la semaine", true),
-      (comm && !speakDay ? btn(`doPlan('${comm.id}')`, "🎭 " + esc(comm.title)) : "") + btn("openParler('output')", "🗣️ Mon petit texte (thème de la semaine)") + btn("openEcrire('output')", "✍️ Écrire"))}
-   ${step(4, "fluency", "Fluidité : aller plus vite",
-      btn(f, "⚡ " + FLU[f], true),
-      flu.filter(x => x !== f).map(x => btn(x, FLU[x])).join(""))}
-  </div>`;
-}
-window.dailySession = dailySession;
+
 
 // ---------- weekly goals (Nation principle 4: short-term goals, daily small steps) ----------
 function weekStart() { const n = new Date(); n.setHours(0, 0, 0, 0); n.setDate(n.getDate() - ((n.getDay() + 6) % 7)); return n.getTime(); }
@@ -390,22 +346,19 @@ window.weeklyGoals = weeklyGoals;
 // ---------- Méthode page ----------
 function renderMethod() {
   setView("method", null);
-  const s = S.settings, C = cal(), hours = Math.round(minutesPerDay() * studyDays(C.start, C.a2End).length / 60);
+  const s = S.settings, days = PARCOURS.reduce((a, p) => a + p.d, 0);
   view.innerHTML = `<div class="card"><h2>Ma méthode pour le A1</h2>
-   <p>Le contenu suit vos trois livres (Grammaire progressive · Vocabulaire progressif · Communication progressive), entremêlés dans leur ordre ; la <b>façon d'apprendre</b> suit les principes de Paul Nation, adaptés aux difficultés propres au français.</p>
-   <div class="row"><label>Objectif : <select id="mo">${[["tcf", "TCF Canada + vie quotidienne"], ["parler", "Parler (voyage, vie, famille)"], ["ecrit", "Examen / écrit (DELF)"], ["tout", "Les deux"]].map(([k, l]) => `<option value="${k}" ${(s.objective || "tcf") === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-   <label>Minutes par jour : <select id="mm">${[20, 30, 40, 60, 90, 120, 160].map(m => `<option ${minutesPerDay() === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
-   <label>Nouvelles cartes / jour : <select id="mn">${[5, 8, 10, 15, 20, 30].map(m => `<option ${s.newPerDay === m ? "selected" : ""}>${m}</option>`).join("")}</select></label></div>
-   <div class="row" style="margin-top:8px"><label>Fin du A1 : <input type="date" id="ma1" value="${s.a1End || "2026-11-29"}"></label><label>Fin du A2 : <input type="date" id="ma2" value="${s.a2End || "2026-12-27"}"></label>
-    ${s.shift ? `<span class="mut">(+ ${s.shift} jours de décalage)</span>` : ""}<button class="b s" onclick="postponeWeek()">Décaler tout d'une semaine</button></div>
-   <p class="mut">Du 28 octobre à la fin du A2 : ${studyDays(C.start, C.a2End).length} jours d'étude (le dimanche = révision seulement) × ${minutesPerDay()} min ≈ <b>${hours} heures</b>. Le volume de chaque jour = ce qui reste ÷ les jours qui restent ; il est recalculé chaque matin.</p></div>
+   <p>Le contenu, ce sont vos trois livres, tous de niveau A1 (Grammaire progressive 3e éd., Vocabulaire progressif 3e éd., Communication progressive 2e éd.), en 30 unités : la grammaire dans l'ordre du livre, chaque dialogue après les temps qu'il utilise, le vocabulaire sur le même thème, et les textes de la fin des livres là où on peut les comprendre. La <b>façon d'apprendre</b> suit Paul Nation : dans chaque unité, environ un quart du temps pour chacun des quatre piliers.</p>
+   <div class="row"><label>Minutes par jour : <select id="mm">${[90, 120, 160].map(m => `<option ${minutesPerDay() === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
+   <label>Nouvelles cartes / jour : <select id="mn">${[15, 20].map(m => `<option ${s.newPerDay === m ? "selected" : ""}>${m}</option>`).join("")}</select></label></div>
+   <p class="mut">Environ ${days} jours d'étude (6 par semaine, le dimanche pour réviser) × ${minutesPerDay()} min ≈ <b>${Math.round(days * minutesPerDay() / 60)} heures</b> pour finir les trois livres, c'est-à-dire le A1. La date de fin est calculée chaque jour d'après votre rythme réel des 7 derniers jours.</p></div>
 
   <div class="card"><h3>1. Quatre parts égales chaque jour</h3><table>
    <tr><th>Pilier</th><th>Pourquoi</th><th>Dans l'application</th></tr>
-   <tr><td>📘 Étude ciblée</td><td>Apprendre délibérément mots, grammaire, sons</td><td>Cartes (répétition espacée), unités de grammaire, conjugaison, dictée</td></tr>
-   <tr><td>🎧 Écoute & lecture</td><td>Beaucoup d'input compréhensible</td><td>Listes FI lues par un natif (lire en écoutant), écoutes FI, prononciation, TV5MONDE</td></tr>
-   <tr><td>🗣️ Production</td><td>Parler/écrire révèle ce qui manque</td><td>Les 40 actes de parole de Communication progressive : expressions, dialogue modèle, jeu de rôle répété 3 fois ; petit texte à mémoriser ; écriture soignée</td></tr>
-   <tr><td>⚡ Fluidité</td><td>Utiliser vite ce qu'on sait déjà</td><td>Genre éclair, nombres à l'oreille, révision éclair, 3/2/1½, écriture 10 min, réécoute accélérée</td></tr></table>
+   <tr><td>📘 Étude ciblée</td><td>Apprendre délibérément mots, grammaire, sons</td><td>Prononciation et répétition, grammaire (moins d'un quart du temps), cartes, conjugaison, dictée</td></tr>
+   <tr><td>🎧 Écoute & lecture</td><td>Beaucoup d'input compréhensible</td><td>Les dialogues du livre avec le CD, les textes du Vocabulaire progressif, les textes enregistrés de la fin des livres</td></tr>
+   <tr><td>🗣️ Production</td><td>Parler/écrire révèle ce qui manque</td><td>Jeu de rôle (refait une et trois unités plus tard), « À vous ! », écriture corrigée sur un point puis réécrite de mémoire, journal</td></tr>
+   <tr><td>⚡ Fluidité</td><td>Utiliser vite ce qu'on sait déjà</td><td>Seulement le connu (l'unité précédente) : réécoute accélérée, récit 3/2/1½, écriture 10 min, genre éclair, nombres</td></tr></table>
    <p class="mut">La grammaire n'est qu'une partie du pilier « étude » : on apprend aussi la grammaire en écoutant, en lisant et en parlant.</p></div>
 
   <div class="card"><h3>2. Ce qui est propre au français (et difficile pour un sinophone)</h3><ul>
@@ -420,17 +373,14 @@ function renderMethod() {
    <li><b>Se rappeler, pas relire</b> : sur chaque carte, cherchez la réponse <i>avant</i> de la retourner. Chaque rappel réussi renforce la mémoire ; relire ne le fait pas.</li>
    <li><b>Espacer</b> : quelques minutes, puis 1 jour, 3 jours, une semaine, un mois… L'application calcule tout. Faites vos cartes <b>chaque jour</b>, même 5 minutes.</li>
    <li><b>Dire à voix haute</b> chaque mot et chaque phrase.</li>
-   <li><b>Ne pas apprendre ensemble des mots trop proches</b> (jours, couleurs, contraires) : ils se mélangent. L'application mélange les nouvelles cartes de plusieurs thèmes (max. 3 par liste et par jour).</li>
+   <li><b>Ne pas apprendre ensemble des mots trop proches</b> (jours, couleurs, contraires) : ils se mélangent. L'application mélange les nouvelles cartes de plusieurs unités (6 au plus par unité et par jour).</li>
    <li><b>Pour un mot qui résiste</b> : la technique du mot-clé — un mot chinois ou anglais au son proche + une image mentale. Une case « astuce mémoire » apparaît sur les cartes ratées.</li>
    <li><b>Des phrases entières</b> plutôt que des mots isolés quand c'est possible (kit de survie, petits textes mémorisés).</li>
    <li><b>Commencer par le kit de survie</b> (~100 phrases) : de quoi se débrouiller dès les premières semaines.</li>
    <li><b>Des objectifs courts</b> : la semaine en cours, pas « parler français ». Cochez, regardez vos barres avancer.</li></ul>
    <p class="mut">Source des principes : Paul Nation, <i>What do you need to know to learn a foreign language?</i> (Victoria University of Wellington, 2014).</p></div>`;
-  $("#mo").onchange = e => { S.settings.objective = e.target.value; save(); };
   $("#mm").onchange = e => { S.settings.minutes = +e.target.value; save(); renderMethod(); };
   $("#mn").onchange = e => { S.settings.newPerDay = +e.target.value; save(); };
-  $("#ma1").onchange = e => { S.settings.a1End = e.target.value; save(); schedule(); };
-  $("#ma2").onchange = e => { S.settings.a2End = e.target.value; save(); schedule(); };
 }
 window.renderMethod = renderMethod;
 
@@ -447,20 +397,8 @@ const commDone = n => S.todo["comm:" + n] && S.todo["comm:" + n].done;
 function renderComm() {
   view.innerHTML = bookCard("comm") + `<div class="card"><h2>Communication — 40 actes de parole</h2><p class="mut">Ordre de Communication progressive du français (niveau débutant), 6 parties. Chaque situation : le dialogue du livre et son enregistrement, les « Manières de dire » (en cartes), l'activité du livre. Le contenu vient de votre saisie du livre. Les « Révisions » de fin de partie sont un ajout de l'application.</p></div>` +
     COMM_PARTS.map(([part, a, b], i) => `<div class="card"><h3>${esc(part)}</h3>${COMM.filter(c => c.n >= a && c.n <= b).map(c =>
-      `<div class="todo"><div style="flex:1">${commDone(c.n) ? "✅" : ""} <b>${c.n}.</b> <a href="#" onclick="openComm(${c.n});return false">${esc(c.title)}</a> ${c.level === "A2" ? '<span class="tag">A2</span>' : ""}${aSaisir("comm", c.n)} <span class="mut">p. ${c.bookPages[0]}–${c.bookPages[1]} · ${esc(c.sit)}</span></div></div>`).join("")}
-      <div class="todo"><div style="flex:1">📝 <a href="#" onclick="openCommBilan(${i});return false"><b>Révision de la partie ${i + 1}</b></a> <span class="mut">unités ${a}–${b}</span></div></div></div>`).join("");
+      `<div class="todo"><div style="flex:1">${commDone(c.n) ? "✅" : ""} <b>${c.n}.</b> <a href="#" onclick="openComm(${c.n});return false">${esc(c.title)}</a> <span class="mut">unité ${(window.UNIT_OF || { c: {} }).c[c.n] || "?"}</span> ${aSaisir("comm", c.n)} <span class="mut">p. ${c.bookPages[0]}–${c.bookPages[1]} · ${esc(c.sit)}</span></div></div>`).join("")}</div>`).join("");
 }
 window.renderComm = renderComm;
-window.openCommBilan = (i, planId) => {
-  setView("comm", "output");
-  const [part, a, b] = COMM_PARTS[i], units = COMM.filter(c => c.n >= a && c.n <= b), pid = planId || "cbilan:" + i;
-  const inPart = id => { const u = String(ITEMS[id].unit); return /^c\d+$/.test(u) && +u.slice(1) >= a && +u.slice(1) <= b; };
-  const ids = shuffle(ALL.filter(inPart)).slice(0, 25);
-  view.innerHTML = `<p><a href="#" onclick="go('comm');return false">← Communication</a></p><div class="card"><h2>Révision de la partie ${i + 1} · ${esc(part)}</h2>
-   <p>1) Révisez 25 expressions de la partie, mélangées. 2) Rejouez 3 jeux de rôle tirés au hasard, sans regarder les dialogues.</p>
-   <p><button class="b" onclick="startReview('ids:${ids.join(",")}')">▶ Réviser 25 expressions</button></p>
-   <h3>Jeux de rôle</h3><ol>${shuffle(units.slice()).slice(0, 3).map(c => `<li><b>${esc(c.title)}</b> — ${esc(c.task || "Rejouez le dialogue du livre")} <a href="#" onclick="openComm(${c.n});return false">(revoir l'unité)</a></li>`).join("")}</ol>
-   <p>${recWidget("brec")}</p>
-   <p><button class="b ok" onclick="toggleTodo('${pid}',true);go('today')">✓ Révision terminée</button></p></div>`;
-};
+
 

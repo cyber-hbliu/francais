@@ -6,13 +6,12 @@
 window.COMM_PARTS = [["Faire les courses", 1, 7], ["Renseigner, se renseigner", 8, 14], ["Parler des lieux et des objets", 15, 20], ["Parler aux autres", 21, 28], ["Parler de soi", 29, 33], ["Parler des autres", 34, 40]];
 window.COMM = CTOC.map(([n, title, sits, gramCol, vocCol]) => ({ n, title, sit: sits.map(s => s[0]).join(" · "), gramCol, vocCol,
   ex: [], task: "", entered: false, dlgs: sits.map(([sit, page]) => ({ sit, page, lines: [], track: "" })) }));
-// End-of-part reviews: not in the book (it ends with communicative activities and a test) — added here
-window.COMM_BILANS = COMM_PARTS.map((p, i) => ({ i, title: p[0], from: p[1], to: p[2] }));
 // « Manières de dire » become review cards (whole phrases) once entered — see applyBook
 window.COMM_PHRASES = [];
 
 // Topic map (book's grammar & vocabulary columns → the other resources). [pages (unused: taken from CTOC), Grammaire chapters, Vocabulaire units, FI chapter, Tex topics]
-// Lessons 1–14 are the A1 phase, 15–40 the A2 phase. Grammar points the A1 grammar book doesn't cover have no chapter (→ Tex).
+// The whole book is A1. Grammar points the grammar book doesn't cover have no chapter: the annexes of the grammar book
+// (6th column) or Tex; acts 20, 22, 28, 33, 37, 38 and 40 are learnt as whole expressions.
 const CMAP = {
  1: [[8, 11], [5, 10, 11], [12, 20], 5, ["gender of nouns", "plural of nouns", "yes/no questions"]],
  2: [[12, 15], [31, 32], [12, 13], 5, ["partitive articles", "expressions of quantity"]],
@@ -31,30 +30,30 @@ const CMAP = {
  15: [[54, 59], [21, 23, 60, 57], [23, 12], 6, ["prepositions of place", "relative pronoun qui", "direct object pronouns passé composé"]],
  16: [[60, 61], [55], [10], 8, ["pronoun en"]],
  17: [[62, 63], [33, 34], [26], 3, ["comparative"]],
- 18: [[64, 65], [15], [14, 10], 7, ["demonstrative pronouns"]],
+ 18: [[64, 65], [15], [14, 10], 7, ["demonstrative pronouns"], [8]],
  19: [[66, 67], [48], [22], 3, ["si clauses", "weather"]],
  20: [[68, 69], [], [18, 17], 9, ["subjunctive"]],
  21: [[70, 71], [9], [1, 2], 1, ["pronominal verbs"]],
  22: [[72, 73], [], [11], 4, ["pluperfect"]],
  23: [[74, 77], [58], [5, 18], 9, ["indirect object pronouns", "double object pronouns"]],
- 24: [[78, 81], [], [6, 27], 10, ["imperative"]],
+ 24: [[78, 81], [], [6, 27], 10, ["imperative"], [5]],
  25: [[82, 83], [54, 53], [11], 8, ["negation passé composé"]],
- 26: [[84, 87], [14, 4], [27, 1], 7, ["possessive adjectives", "on"]],
- 27: [[88, 89], [], [15, 17], 12, ["indirect discourse"]],
+ 26: [[84, 87], [14, 4], [10, 17, 1], 7, ["possessive adjectives", "on"]],
+ 27: [[88, 89], [], [15, 17], 12, ["indirect discourse"], [6]],
  28: [[90, 91], [], [14, 27], 5, ["conditional"]],
  29: [[92, 97], [46], [7, 6], 10, ["indefinite pronouns", "passé composé être", "gerund"]],
  30: [[98, 99], [6], [27, 28], 2, ["verb + de + infinitive"]],
  31: [[100, 101], [38], [17], 12, ["savoir connaître"]],
- 32: [[102, 103], [], [19, 17], 12, ["passé récent venir de"]],
+ 32: [[102, 103], [], [19, 17], 12, ["passé récent venir de"], [7]],
  33: [[104, 105], [], [3], 7, ["nominalization"]],
  34: [[106, 109], [60], [16], 11, ["ce qui ce que", "impersonal expressions"]],
- 35: [[110, 111], [47, 49], [8], 4, ["passé composé imparfait"]],
- 36: [[112, 113], [], [9, 8], 10, ["adverbs"]],
+ 35: [[110, 111], [44, 45, 46, 47, 49], [8], 4, ["passé composé imparfait"]],
+ 36: [[112, 113], [], [9, 8], 10, ["adverbs"], [1, 2]],
  37: [[114, 115], [], [2, 3], 13, ["tout toute tous"]],
  38: [[116, 117], [], [27], 10, ["passive voice"]],
  39: [[118, 119], [51], [27], 10, ["cause parce que"]],
  40: [[120, 121], [], [28], 9, ["opposition mais"]]
 };
 COMM.forEach(c => { const m = CMAP[c.n], next = CTOC[c.n] ? CTOC[c.n][2][0][1] : 122;
-  Object.assign(c, { bookPages: [c.dlgs[0].page, next - 1], grammar: m[1], vocabUnits: m[2], fiChapter: m[3], texTopics: m[4], level: c.n <= 14 ? "A1" : "A2" }); });
+  Object.assign(c, { bookPages: [c.dlgs[0].page, next - 1], grammar: m[1], vocabUnits: m[2], fiChapter: m[3], texTopics: m[4], annexes: m[5] || [], level: "A1" }); });
 window.TEX = "https://utexas.pressbooks.pub/texfrenchgrammar/";

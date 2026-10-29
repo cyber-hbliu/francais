@@ -76,13 +76,14 @@ const AUDIO_REPO = "cyber-hbliu/francais-audio", AUDIO_CACHE = "fr-book-audio";
 const audioTok = () => { try { return localStorage.getItem("fr-audio-token"); } catch (e) { return null; } };
 window.bookAudioFallback = async (el, path) => {
   el.onerror = null;
-  const t = audioTok(), file = path.split("/").pop(); if (!t) return;
+  // audio/comm/04.mp3 → comm/04.mp3 in the private repository (audio/gram and audio/voc likewise)
+  const t = audioTok(), file = path.replace(/^audio\//, ""); if (!t) return;
   try {
     const cache = window.caches ? await caches.open(AUDIO_CACHE) : null, key = "https://audio.local/" + file;
     let r = cache && await cache.match(key);
     if (!r) {
       r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/${file}`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github.raw" } });
-      if (!r.ok) return; // this act has no recording yet
+      if (!r.ok) return; // no recording for this track yet
       if (cache) { await cache.put(key, r.clone()); }
     }
     el.src = URL.createObjectURL(await r.blob()); // downloaded once per device, then played offline
@@ -92,9 +93,13 @@ async function audioCheck() {
   const el = document.getElementById("audst"); if (!el) return;
   const t = audioTok(); if (!t) { el.textContent = "Pas de jeton audio sur cet appareil."; return; }
   try {
-    const r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github+json" } });
-    if (!r.ok) throw new Error(r.status === 404 ? "dépôt introuvable (lancez publier-audio.sh, et donnez au jeton l'accès à francais-audio)" : "GitHub " + r.status);
-    const n = (await r.json()).filter(f => /\.mp3$/i.test(f.name)).length;
+    let n = 0;
+    for (const d of ["comm", "gram", "voc"]) {
+      const r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/${d}`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github+json" } });
+      if (r.status === 404) { const root = await fetch(`https://api.github.com/repos/${AUDIO_REPO}`, { headers: { Authorization: "Bearer " + t } }); if (!root.ok) throw new Error("dépôt introuvable (lancez publier-audio.sh, et donnez au jeton l'accès à francais-audio)"); continue; }
+      if (!r.ok) throw new Error("GitHub " + r.status);
+      n += (await r.json()).filter(f => /\.mp3$/i.test(f.name)).length;
+    }
     el.innerHTML = `✓ Accès au dépôt privé : ${n} fichier${n > 1 ? "s" : ""} audio.`;
   } catch (e) { el.innerHTML = `<span class="badc">Erreur : ${esc(e.message)}</span>`; }
 }
