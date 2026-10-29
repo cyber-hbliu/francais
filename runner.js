@@ -505,7 +505,7 @@ window.openComm = (n, planId, mode, k) => {
   DP.sit = k;
   if (!RUN_ACTIVE) view.insertAdjacentHTML("beforeend", `<div class="card"><h3>Activité du livre</h3><p style="margin:0;white-space:pre-line">${esc(c.task || "Rejouez le dialogue du livre.")}</p></div>
     ${c.acts ? actsHTML(n, c.acts) : ""}
-    <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});go('comm')">✓ Dialogue terminé</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
+    <div class="row"><button class="b ok" onclick="doneDialogue(${n},${k});go('today')">✓ Dialogue terminé</button>${n < 40 ? `<button class="b s" onclick="openComm(${n + 1})">Leçon suivante →</button>` : ""}</div>`);
 };
 // A2 grammar block: the grammar of today's dialogue (chapters already studied, Tex for new points) + conjugation
 window.openDialogueGrammar = n => {
@@ -686,5 +686,4 @@ document.addEventListener("keydown", e => {
   if (/^[1-4]$/.test(k)) { const b = document.querySelector(`#ans [data-g="${+k - 1}"]`); if (b) b.click(); return; }
   if (k === "r" || k === "R") { const b = document.querySelector("button[onclick^=\"recToggle\"]"); if (b) b.click(); }
 });
-
-go("today");
+// the first page is drawn by units.js, loaded last

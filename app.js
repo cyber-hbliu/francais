@@ -121,16 +121,17 @@ const tv5Link = (label) => `<a target="_blank" rel="noopener" href="${TV5}">TV5M
 // ---------- router ----------
 const view = $("#view");
 let tab = "today";
-const PARENT = { comm: "books", learn: "books", vocab: "books", dico: "tools", highlight: "tools", recs: "tools", progress: "me", method: "me", sync: "me" };
-const SUBS = { books: [["comm", "Communication"], ["learn", "Grammaire"], ["vocab", "Vocabulaire"]], tools: [["dico", "Dictionnaire"], ["highlight", "Surligneur"], ["recs", "Enregistrements"]], me: [["progress", "Progrès"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
+const PARENT = { uwords: "mots", errs: "mots", dico: "mots", progress: "more", comm: "more", learn: "more", vocab: "more", highlight: "more", recs: "more", method: "more", sync: "more" };
+const SUBS = { mots: [["uwords", "Mots de l'unité"], ["errs", "Carnet d'erreurs"], ["dico", "Dictionnaire"]], more: [["progress", "Statistiques"], ["comm", "Communication"], ["learn", "Grammaire"], ["vocab", "Vocabulaire"], ["highlight", "Surligneur"], ["recs", "Enregistrements"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
 function go(t, arg) {
   if (window.stopActivity) stopActivity();
   if (t === "today" && window.RUN_ACTIVE && window.blockReturn) { blockReturn(); return; } // inside a block: back to the block screen
-  if (SUBS[t]) t = t === "me" ? "progress" : (S.ui || {})[t] || SUBS[t][0][0]; // "Mes progrès" always opens the progress page
-  tab = t; curStrand = { learn: "study", vocab: "study", review: "study", dico: "study", comm: "output" }[t] || null;
+  t = { me: "progress", books: "comm", tools: "highlight", review: "uwords" }[t] || t; // older links
+  if (SUBS[t]) t = t === "mots" ? "uwords" : (S.ui || {})[t] || SUBS[t][0][0]; // "Mots" always opens the unit's words
+  tab = t; curStrand = { learn: "study", vocab: "study", uwords: "study", errs: "study", dico: "study", comm: "output", journal: "output" }[t] || null;
   const top = PARENT[t] || t; if (PARENT[t]) { S.ui = S.ui || {}; S.ui[top] = t; }
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === top));
-  ({ today: () => renderToday(), method: () => renderMethod(), comm: () => renderComm(), dico: q => renderDico(q), recs: () => renderRecs(), learn: renderLearn, vocab: renderVocab, review: renderReviewHome, highlight: renderHighlight, progress: renderProgress, sync: renderSync })[t](arg);
+  ({ today: () => renderHome(), uwords: () => renderUnitWords(), errs: () => renderErrors(), journal: () => renderJournal(), method: () => renderMethod(), comm: () => renderComm(), dico: q => renderDico(q), recs: () => renderRecs(), learn: renderLearn, vocab: renderVocab, review: renderReviewHome, highlight: renderHighlight, progress: renderProgress, sync: renderSync })[t](arg);
   if (PARENT[t]) view.insertAdjacentHTML("afterbegin", `<div class="row subnav" style="margin-bottom:10px">${SUBS[top].map(([k, l]) => `<button class="b ${k === t ? "" : "s"}" onclick="go('${k}')">${l}</button>`).join("")}</div>`);
   scrollTo(0, 0);
   document.title = (dueIds().length ? `(${dueIds().length}) ` : "") + "Boîte à outils française";
@@ -342,12 +343,17 @@ function buildQueue(mode) {
   if (mode === "block" || mode === "blockmin") { // a card block: due cards + at most 20 new; no new cards when the backlog is large
     const due = dueIds().sort((a, b) => card(a).due - card(b).due);
     const nn = due.length > 150 ? 0 : Math.min(mode === "blockmin" ? 10 : 20, newQuota());
-    return due.slice(0, mode === "blockmin" ? 40 : 200).concat(newInPlanOrder().slice(0, nn));
+    return due.slice(0, mode === "blockmin" ? 40 : 200).concat(parcoursNew().slice(0, nn));
   }
   if (mode === "due") {
     const due = dueIds().sort((a, b) => card(a).due - card(b).due);
-    return due.concat(newInPlanOrder().slice(0, newQuota()));
+    return due.concat(parcoursNew().slice(0, newQuota()));
   }
+  if (mode.startsWith("pu:")) { // one unit of the parcours: its due cards, then ≤ 20 new ones (book words first, by frequency)
+    const ids = unitWordIds(+mode.slice(3));
+    return ids.filter(isDue).concat(ids.filter(id => !card(id)).sort(wordOrder).slice(0, 20));
+  }
+  if (mode === "carnet") return carnetIds().slice(0, 25);
   if (mode === "mistakes") return leeches().concat(ALL.filter(id => card(id) && card(id).lapses > 0 && !leeches().includes(id))).slice(0, 25);
   if (mode.startsWith("unit:")) {
     const n = mode.slice(5), ids = ALL.filter(id => String(ITEMS[id].unit) === n);
@@ -559,13 +565,15 @@ function merge(a, b) { // b merged into a
   for (const [d, v] of Object.entries(b.daily || {})) if (v.st && !sum[d]) { const x = a.daily[d]; x.st = x.st || {}; for (const k in v.st) x.st[k] = Math.max(x.st[k] || 0, v.st[k]); }
   a.notes = Object.assign({}, b.notes || {}, a.notes || {});
   a.custom = Object.assign({}, b.custom || {}, a.custom || {});
-  for (const k of ["dayplan", "dayDone", "roleNotes", "exams", "dlgDone", "actAns"]) a[k] = Object.assign({}, b[k] || {}, a[k] || {});
+  for (const k of ["dayplan", "dayDone", "roleNotes", "exams", "dlgDone", "actAns", "ustep", "carnet"]) a[k] = Object.assign({}, b[k] || {}, a[k] || {});
   // a day's blocks: keep the version where more blocks are done (studying on the phone, then on the computer)
   a.run = a.run || {}; for (const [d, r] of Object.entries(b.run || {})) { const l = a.run[d], nd = x => x ? x.blocks.filter(y => y.done).length : -1; if (nd(r) > nd(l)) a.run[d] = r; }
   { const seen = new Set((a.roles || []).map(x => x.t)); a.roles = (a.roles || []).concat((b.roles || []).filter(x => !seen.has(x.t))); }
   a.talkText = Object.assign({}, b.talkText || {}, a.talkText || {});
   for (const k of ["writing", "talks", "dictee", "genre", "nombres"]) { const seen = new Set((a[k] || []).map(x => x.t)); a[k] = (a[k] || []).concat((b[k] || []).filter(x => !seen.has(x.t))).sort((x, y) => x.t - y.t); }
   a.conj = a.conj || {}; for (const [k, v] of Object.entries(b.conj || {})) if (!a.conj[k] || v.last > a.conj[k].last) a.conj[k] = v;
+  a.cur = Math.max(a.cur || 1, b.cur || 1);
+  a.journal = a.journal || {}; for (const [d, e] of Object.entries(b.journal || {})) if (!a.journal[d] || (e.at || 0) > (a.journal[d].at || 0)) a.journal[d] = e;
   a.lastExport = Math.max(a.lastExport || 0, b.lastExport || 0);
   // the book content you entered: the most recent entry of each unit wins
   a.book = a.book || {}; for (const [k, units] of Object.entries(b.book || {})) { const m = a.book[k] || (a.book[k] = {}); for (const [n, e] of Object.entries(units)) if (!m[n] || (e.at || 0) > (m[n].at || 0)) m[n] = e; }
