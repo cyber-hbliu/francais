@@ -422,7 +422,7 @@ async function voiceCompare() {
   const el = $("#voicebox"); if (!el) return;
   try {
     const recs = await recAll(); let pool = recs.filter(r => r.kind === "intro"); if (pool.length < 1) pool = recs.filter(r => r.kind === "talk");
-    if (!pool.length) { el.innerHTML = `<p class="mut">Pas encore d'enregistrement. Le premier « Me présenter » se fait à l'étape Fluidité de l'unité 1, puis dans le bilan de chaque dimanche.</p>`; return; }
+    if (!pool.length) { el.innerHTML = `<p class="mut">Pas encore d'enregistrement. Le premier « Me présenter » se fait quand vous voulez (Plus → Enregistrements), puis une fois par semaine.</p>`; return; }
     const a = pool[0], b = pool[pool.length - 1], row = (r, now, label) => { VOICE_A[r.id] = new Audio(URL.createObjectURL(r.blob)); const lp = r.longPauses ?? r.pauses ?? 0;
       return `<div class="voice ${now ? "now" : ""}"><button type="button" onclick="playVoice('${r.id}',this)" aria-label="Écouter l'enregistrement du ${esc(dayShort(r.date))}">${ICON.play}</button><div style="display:flex;flex-direction:column"><span style="font-weight:600">${esc(label)}</span><span class="mut" style="font-size:14px">${mmss(r.dur || 0)} · ${lp ? lp + " longue" + (lp > 1 ? "s" : "") + " pause" + (lp > 1 ? "s" : "") : "aucune longue pause"}</span></div></div>`; };
     el.innerHTML = row(a, false, `${dayShort(a.date)} · jour ${studyDays(cal().start, a.date).length || 1}`) + (b !== a ? row(b, true, `${dayShort(b.date)}${b.date === dstr() ? " · aujourd'hui" : ""}`) : "");
@@ -435,14 +435,14 @@ function renderProgress() {
   const w10 = (S.writing || []).filter(x => x.mode === "fluency").slice(-12), wmax = Math.max(50, ...w10.map(x => x.words));
   view.innerHTML = `<h1>Mes progrès</h1>${heatmapHTML()}
    <div class="stats"><div class="stat"><div class="k">Série</div><b>${st} jour${st > 1 ? "s" : ""}</b></div><div class="stat"><div class="k">Temps total</div><b>${fmtDur(t.total)}</b></div>
-    <div class="stat"><div class="k">Unité</div><b>${k} / 30</b></div></div>
+    <div class="stat"><div class="k">Leçon</div><b>${k} / 100</b></div></div>
    <section class="card"><p style="margin:0">${unitPace()}</p><h3 style="margin-top:14px">Les quatre piliers cette semaine</h3>${strandWeek()}</section>
    <div class="row" style="gap:16px;align-items:stretch">${pillarsHTML()}
     <section class="card" aria-label="Mes enregistrements" style="flex:1 1 420px;min-width:0;display:flex;flex-direction:column;gap:14px"><div><h2 style="margin:0">Ma voix, jour 1 et aujourd'hui</h2><p class="mut" style="margin:0;font-size:14px">Le même exercice : me présenter en français</p></div>
      <div id="voicebox" style="display:flex;flex-direction:column;gap:12px"><p class="mut">Chargement…</p></div><a href="#" onclick="go('recs');return false" style="font-size:15px">Tous mes enregistrements</a></section></div>
    <section class="card" aria-label="Contrôle DELF" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;padding:20px 32px">
-    <div><h2 style="margin:0">Contrôle DELF A1 · à l'unité 30</h2><p class="mut" style="margin:0;font-size:15px">${sc ? `Score : ${sc.listen} sur 25 à l'écoute et ${sc.read} sur 25 à la lecture (objectif ${EXAM_GOAL[lv]})` : "Avec les tests d'évaluation des trois livres, après la dernière unité."}</p></div>
-    <span class="chip" style="margin:0">${k >= 30 ? "maintenant" : "dans " + (30 - k) + " unité" + (30 - k > 1 ? "s" : "")}</span></section>
+    <div><h2 style="margin:0">Contrôle DELF A1 · à la leçon 49</h2><p class="mut" style="margin:0;font-size:15px">${sc ? `Score : ${sc.listen} sur 25 à l'écoute et ${sc.read} sur 25 à la lecture (objectif ${EXAM_GOAL[lv]})` : "Un sujet d'exemple, à la fin de la phase passive d'Assimil."}</p></div>
+    <span class="chip" style="margin:0">${k >= 49 ? "maintenant" : "dans " + (49 - k) + " leçon" + (49 - k > 1 ? "s" : "")}</span></section>
    ${Object.keys(ex).length ? `<p class="mut" style="margin:0">Scores enregistrés : ${Object.entries(ex).map(([l, e]) => `DELF ${l} — écoute ${e.listen}/25 · lecture ${e.read}/25`).join(" · ")}</p>` : ""}
    <div class="row" style="gap:16px;align-items:stretch">
     <section class="card" style="flex:1 1 420px;min-width:0"><h2>À retravailler</h2>

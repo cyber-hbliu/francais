@@ -6,3 +6,7 @@ audio/voc/
 # local tooling
 .claude/
 .DS_Store
+# Assimil book and recordings (private, never published)
+assimil_french_2020.pdf
+ASSIMIL French/
+audio/assimil/

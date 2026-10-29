@@ -18,6 +18,7 @@ function load() {
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { console.warn(e); } }
 load();
 applyBook(S); // the content you entered from the three books → LESSONS / COMM / VOCAB (book.js)
+applyAssimil(S); // the lessons of Assimil and its lexicon (assimil.js)
 // study time is also kept per device (S.dev), so two devices studying on the same day add up after a sync
 const DEV = (() => { let d = "local"; try { d = localStorage.getItem("fr-dev"); if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem("fr-dev", d); } } catch (e) { } return d; })();
 if (!S.dev) S.dev = { [DEV]: JSON.parse(JSON.stringify(S.daily)) }; // history so far belongs to this device
@@ -125,7 +126,7 @@ const tv5Link = (label) => `<a target="_blank" rel="noopener" href="${TV5}">TV5M
 const view = $("#view");
 let tab = "today";
 const PARENT = { uwords: "mots", errs: "mots", dico: "mots", progress: "more", livres: "more", comm: "more", learn: "more", vocab: "more", highlight: "more", recs: "more", method: "more", sync: "more" };
-const SUBS = { mots: [["uwords", "Mots de l'unité"], ["errs", "Carnet d'erreurs"], ["dico", "Dictionnaire"]], more: [["progress", "Statistiques"], ["livres", "Livres"], ["recs", "Enregistrements"], ["highlight", "Surligneur"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
+const SUBS = { mots: [["uwords", "Mots de la leçon"], ["errs", "Carnet d'erreurs"], ["dico", "Dictionnaire"]], more: [["progress", "Statistiques"], ["livres", "Livres"], ["recs", "Enregistrements"], ["highlight", "Surligneur"], ["method", "Méthode"], ["sync", "Sauvegarde"]] };
 function go(t, arg) {
   if (window.stopActivity) stopActivity();
   window.STEP = null; // leaving a unit step

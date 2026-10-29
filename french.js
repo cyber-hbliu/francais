@@ -14,7 +14,7 @@ const strandMin = (d, k) => Math.round((((S.daily[d] || {}).st || {})[k] || 0) /
 window.logMinutes = (k, m) => { addDay(null, m * 60, k); addDay("secs", m * 60); save(); go(tab === "today" ? "today" : tab); };
 const STRANDS = [["study", "📘 Étude ciblée"], ["input", "🎧 Écoute & lecture"], ["output", "🗣️ Production"], ["fluency", "⚡ Fluidité"]];
 function setView(t, strand) { stopActivity(); tab = t; curStrand = strand; document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === t)); scrollTo(0, 0); }
-const back = `<p><a href="#" onclick="go('today');return false">← Mon unité</a></p>`;
+const back = `<p><a href="#" onclick="go('today');return false">← Ma leçon</a></p>`;
 let TIMER = null;
 function stopActivity() { if (TIMER) clearInterval(TIMER); TIMER = null; if (window.speechSynthesis) speechSynthesis.cancel(); if (rec && rec.state === "recording") rec.stop(); }
 window.stopActivity = stopActivity;
@@ -92,7 +92,8 @@ function conjForm(v, t, p) { // returns the form without the subject (with refle
   return alts;
 }
 function tenseUnlocked(v, t) {
-  if (!reachedLesson(v.unit)) return false;
+  // a verb opens with the Assimil lesson where it first appears (the lexicon of the book)
+  if (!(window.verbLesson ? verbLesson(v.inf) <= curUnit() : reachedLesson(v.unit))) return false;
   if (t === "pres") return true;
   if (t === "pc") return reachedLesson(v.aux === "être" ? 46 : (/er$/.test(v.base) && v.inf !== "être" ? 44 : 45));
   return reachedLesson(TENSES[t][1]);
@@ -111,14 +112,14 @@ function pickConj(n) { // adaptive: weak and less-practised (verb, tense) pairs 
 window.openConj = () => {
   setView("today", "study");
   const q = pickConj(12);
-  if (!q.length) { view.innerHTML = back + `<div class="card"><h2>Conjugaison</h2><p>Les conjugaisons s'ouvrent avec le chapitre 4 de la grammaire (« être »), à l'unité ${UNIT_OF.g[4]}.</p></div>`; return; }
+  if (!q.length) { view.innerHTML = back + `<div class="card"><h2>Conjugaison</h2><p>Les conjugaisons s'ouvrent avec les verbes des leçons d'Assimil : importez le lexique du livre (Plus → Livres).</p></div>`; return; }
   let i = 0, ok = 0, firstWrong = new Set();
   const n0 = q.length;
   const draw = () => {
     if (i >= q.length) { view.innerHTML = back + `<div class="card"><h2>Conjugaison terminée ✅</h2><p>${ok} bonnes réponses du premier coup sur ${n0}.</p><p class="mut">Les couples verbe + temps où vous vous trompez reviendront plus souvent.</p><p class="row"><button class="b" onclick="openConj()">Encore 12</button><button class="b s" onclick="go('today')">Retour</button></p></div>`; return; }
     const x = q[i], v = byInf(x.inf), alts = conjForm(v, x.t, x.p);
     view.innerHTML = back + `<div class="bar"><i style="width:${i / q.length * 100}%"></i></div>
-     <div class="card"><span class="tag">${TENSES[x.t][0]}</span><span class="tag">unité ${v.unit}</span>
+     <div class="card"><span class="tag">${TENSES[x.t][0]}</span><span class="tag">leçon ${window.verbLesson ? verbLesson(v.inf) : v.unit}</span>
      <div class="big"><span class="mut">${v.inf} →</span> ${PERS[x.p]} ___</div>
      <p><input type="text" id="ci" autocomplete="off" autocapitalize="off" placeholder="${x.t === "pc" ? "auxiliaire + participe" : "forme du verbe"}${v.refl ? " (avec le pronom)" : ""}"></p>
      <p class="row"><button class="b" id="cc">Vérifier</button></p><div id="ca"></div></div>`;
@@ -145,10 +146,8 @@ window.openConj = () => {
 // ---------- dictation (sound → spelling: silent endings, accents, homophones) ----------
 function dicteePool() {
   const out = [];
-  LESSONS.filter(l => reachedLesson(l.n)).forEach(l => l.examples.forEach(e => out.push(plain(e[0]))));
-  // only text from your book entries (and the survival kit)
-  if (reachedVocab(0)) SURVIVAL.filter(s => !/…|\//.test(s.fr)).forEach(s => out.push(s.fr));
-  COMM.filter(c => reachedComm(c.n)).forEach(c => c.dlgs.forEach(d => d.lines.forEach(l => out.push(l.text))));
+  // the sentences of the Assimil dialogues already studied (only text from your own book import)
+  for (let k = 1; k <= curUnit(); k++) (AS[k] ? AS[k].dlg : []).forEach(l => { const t = l.text.replace(/⁽\d+⁾|\[|\]/g, "").replace(/_/g, " ").replace(/\s+/g, " ").trim(); if (t.split(" ").length >= 3 && t.split(" ").length <= 14) out.push(t); });
   return out;
 }
 const toks = s => s.replace(/[«»"!?.,;:—–()]/g, " ").replace(/[’]/g, "'").split(/\s+/).filter(Boolean);
@@ -200,7 +199,7 @@ function nounPool() {
 }
 window.openGenre = () => {
   setView("today", "fluency");
-  const pool = shuffle(nounPool()); if (pool.length < 8) { view.innerHTML = back + `<div class="card"><h2>Genre éclair</h2><p>Pas encore assez de noms appris. Revenez après quelques unités de vocabulaire.</p></div>`; return; }
+  const pool = shuffle(nounPool()); if (pool.length < 8) { view.innerHTML = back + `<div class="card"><h2>Genre éclair</h2><p>Pas encore assez de noms appris. Revenez après quelques leçons (les noms viennent du lexique d'Assimil).</p></div>`; return; }
   let i = 0, ok = 0, n = 0;
   view.innerHTML = back + `<div class="card"><h2>Genre éclair ⚡ <span id="gt" class="tag"></span></h2>
    <p class="mut">Le genre se mémorise avec le mot. Masculin ou féminin ? Le plus vite possible — touches ← (le) et → (la).</p>
@@ -256,7 +255,7 @@ window.openEclair = () => {
 // before week 1, or every other day, a prepared talk about Bing's own life (Nation 4.3)
 function weekTopic() {
   const k = curUnit(), c = k < 2 ? null : COMM.find(x => x.n === lessonOfDay());
-  const gs = PARCOURS.slice(0, k).flatMap(p => p.g), gram = LESSONS[(gs[gs.length - 1] || 1) - 1];
+  const gram = { title: "les tournures de la leçon « " + AS[k].title + " »", n: k };
   if (!c) return { n: 0, title: "Kit de survie", prompt: PROMPTS[0], gram };
   const perso = PERSO[dayIndex() % PERSO.length], n = c.vocabUnits[0] || 0;
   return dayIndex() % 2 ? { n, title: c.title, prompt: PROMPTS[n] || PROMPTS[0], gram } : { n: "p" + (dayIndex() % PERSO.length), title: "Ma vie", prompt: perso, gram };
@@ -291,7 +290,7 @@ window.openEcrire = (mode) => {
   view.innerHTML = back + `<div class="card"><span class="tag">Thème : ${esc(w.title)}</span><h2>✍️ ${mode === "fluency" ? "Écriture rapide — 10 minutes" : "Écrire avec soin"}</h2>
    ${mode === "fluency" ? `<p class="mut">Sujet facile, déjà connu. Écrivez sans vous arrêter, sans dictionnaire, sans corriger. On compte les mots : l'objectif est d'en écrire un peu plus à chaque fois.</p>
       <p><b>${esc(w.prompt[0])}</b></p><p class="row"><span class="tag" id="wt">10:00</span><button class="b" id="ws">▶ Commencer</button><button class="b s" id="ws5">5 min</button></p>`
-    : `<p><b>${esc(w.prompt[0])}</b></p><p>Écrivez 5 à 8 phrases. Utilisez au moins 2 fois : <mark>${esc(w.gram.title)}</mark> (unité ${w.gram.n}).</p>
+    : `<p><b>${esc(w.prompt[0])}</b></p><p>Écrivez 5 à 8 phrases. Utilisez au moins 2 fois : <mark>${esc(w.gram.title)}</mark> (leçon ${w.gram.n}).</p>
       <p class="mut">Prenez votre temps, vérifiez accords, genres et terminaisons. Puis faites corriger (francophone, professeur ou Claude) et <b>réécrivez</b> le texte corrigé de mémoire.</p>`}
    <textarea id="wx" style="min-height:200px" placeholder="Écrivez ici…"></textarea>
    <p class="row"><span class="mut" id="wn">0 mot</span><button class="b ok" id="wv">💾 Enregistrer</button></p></div>
@@ -349,24 +348,24 @@ window.weeklyGoals = weeklyGoals;
 function renderMethod() {
   setView("method", null);
   const s = S.settings, days = PARCOURS.reduce((a, p) => a + p.d, 0);
-  view.innerHTML = `<div class="card"><h2>Ma méthode pour le A1</h2>
-   <p>Le contenu, ce sont vos trois livres, tous de niveau A1 (Grammaire progressive 3e éd., Vocabulaire progressif 3e éd., Communication progressive 2e éd.), en 30 unités : la grammaire dans l'ordre du livre, chaque dialogue après les temps qu'il utilise, le vocabulaire sur le même thème, et les textes de la fin des livres là où on peut les comprendre. La <b>façon d'apprendre</b> suit Paul Nation : dans chaque unité, environ un quart du temps pour chacun des quatre piliers.</p>
+  view.innerHTML = `<div class="card"><h2>Ma méthode</h2>
+   <p>Le contenu, c'est <b>Assimil — French</b> (With Ease, 2020), une leçon par jour, 100 leçons, avec <b>Français interactif</b> (UT Austin) sur le même thème : les listes de mots enregistrées, les 13 leçons de prononciation, les écoutes. L'ordre est celui d'Assimil : jusqu'à la leçon 49, on écoute, on comprend et on répète (phase passive) ; à partir de la leçon 50, chaque jour s'ajoute la <b>deuxième vague</b>, une leçon de 49 jours plus tôt, reprise de l'anglais vers le français. La <b>façon d'apprendre</b> suit Paul Nation : dans chaque leçon, environ un quart du temps pour chacun des quatre piliers.</p>
    <div class="row"><label>Minutes par jour : <select id="mm">${[90, 120, 160].map(m => `<option ${minutesPerDay() === m ? "selected" : ""}>${m}</option>`).join("")}</select></label>
    <label>Nouvelles cartes / jour : <select id="mn">${[15, 20].map(m => `<option ${s.newPerDay === m ? "selected" : ""}>${m}</option>`).join("")}</select></label></div>
-   <p class="mut">Environ ${days} jours d'étude (6 par semaine, le dimanche pour réviser) × ${minutesPerDay()} min ≈ <b>${Math.round(days * minutesPerDay() / 60)} heures</b> pour finir les trois livres, c'est-à-dire le A1. La date de fin est calculée chaque jour d'après votre rythme réel des 7 derniers jours.</p></div>
+   <p class="mut">${days} leçons, une par jour (la 7e de chaque semaine est une révision) × environ une heure ≈ <b>${days} heures</b>. La date de fin est calculée chaque jour d'après votre rythme réel des 7 derniers jours.</p></div>
 
   <div class="card"><h3>1. Quatre parts égales chaque jour</h3><table>
    <tr><th>Pilier</th><th>Pourquoi</th><th>Dans l'application</th></tr>
-   <tr><td>📘 Étude ciblée</td><td>Apprendre délibérément mots, grammaire, sons</td><td>Prononciation et répétition, grammaire (moins d'un quart du temps), cartes, conjugaison, dictée</td></tr>
-   <tr><td>🎧 Écoute & lecture</td><td>Beaucoup d'input compréhensible</td><td>Les dialogues du livre avec le CD, les textes du Vocabulaire progressif, les textes enregistrés de la fin des livres</td></tr>
-   <tr><td>🗣️ Production</td><td>Parler/écrire révèle ce qui manque</td><td>Jeu de rôle (refait une et trois unités plus tard), « À vous ! », écriture corrigée sur un point puis réécrite de mémoire, journal</td></tr>
-   <tr><td>⚡ Fluidité</td><td>Utiliser vite ce qu'on sait déjà</td><td>Seulement le connu (l'unité précédente) : réécoute accélérée, récit 3/2/1½, écriture 10 min, genre éclair, nombres</td></tr></table>
+   <tr><td>📘 Étude ciblée</td><td>Apprendre délibérément mots, grammaire, sons</td><td>Notes du livre, prononciation (FI), répétition phrase par phrase, exercices 1 et 2, cartes, conjugaison, dictée</td></tr>
+   <tr><td>🎧 Écoute & lecture</td><td>Beaucoup d'input compréhensible</td><td>Le dialogue de la leçon avec son enregistrement (sans texte, puis avec le texte et la traduction), les listes et écoutes de Français interactif</td></tr>
+   <tr><td>🗣️ Production</td><td>Parler/écrire révèle ce qui manque</td><td>Redire le dialogue à partir de la traduction, la deuxième vague à partir de la leçon 50, écriture corrigée puis réécrite de mémoire, journal</td></tr>
+   <tr><td>⚡ Fluidité</td><td>Utiliser vite ce qu'on sait déjà</td><td>Seulement le connu (les leçons d'avant) : réécoute accélérée, récit 3/2/1½, écriture 10 min, genre éclair, nombres</td></tr></table>
    <p class="mut">La grammaire n'est qu'une partie du pilier « étude » : on apprend aussi la grammaire en écoutant, en lisant et en parlant.</p></div>
 
   <div class="card"><h3>2. Ce qui est propre au français (et difficile pour un sinophone)</h3><ul>
-   <li><b>Les sons et l'orthographe ne correspondent pas un à un</b> : finales muettes (-s, -t, -ent), e muet, liaison, voyelles nasales, /y/ ≠ /u/, le /R/. → 13 leçons de prononciation FI au début du plan, et la <b>dictée</b>.</li>
+   <li><b>Les sons et l'orthographe ne correspondent pas un à un</b> : finales muettes (-s, -t, -ent), e muet, liaison, voyelles nasales, /y/ ≠ /u/, le /R/. → les 13 leçons de prononciation FI dans les 15 premières leçons, la répétition phrase par phrase, et la <b>dictée</b>.</li>
    <li><b>Chaque nom a un genre</b> (le/la), qu'il faut apprendre avec le mot. → Les mots sont colorés <span class="g-m">masculin</span> / <span class="g-f">féminin</span>, et le jeu « Genre éclair ».</li>
-   <li><b>Les verbes se conjuguent</b> (6 personnes × plusieurs temps) — c'est le cœur de la Grammaire progressive. → Entraîneur de conjugaison adaptatif, ouvert unité par unité.</li>
+   <li><b>Les verbes se conjuguent</b> (6 personnes × plusieurs temps) → Entraîneur de conjugaison adaptatif : chaque verbe s'ouvre à la leçon d'Assimil où il apparaît.</li>
    <li><b>Accords</b> (adjectifs, participes) et <b>élision</b> (j', l', n') → exercices de grammaire tapés, la dictée vérifie l'orthographe exacte.</li>
    <li><b>Oral ≠ écrit</b> (« je sais pas », « on » pour « nous ») → écoutes de vrais locuteurs (FI, TV5MONDE).</li>
    <li><b>Beaucoup de mots ressemblent à l'anglais</b> (université, possible, restaurant) : profitez-en, mais attention aux faux amis.</li></ul></div>
@@ -375,10 +374,9 @@ function renderMethod() {
    <li><b>Se rappeler, pas relire</b> : sur chaque carte, cherchez la réponse <i>avant</i> de la retourner. Chaque rappel réussi renforce la mémoire ; relire ne le fait pas.</li>
    <li><b>Espacer</b> : quelques minutes, puis 1 jour, 3 jours, une semaine, un mois… L'application calcule tout. Faites vos cartes <b>chaque jour</b>, même 5 minutes.</li>
    <li><b>Dire à voix haute</b> chaque mot et chaque phrase.</li>
-   <li><b>Ne pas apprendre ensemble des mots trop proches</b> (jours, couleurs, contraires) : ils se mélangent. L'application mélange les nouvelles cartes de plusieurs unités (6 au plus par unité et par jour).</li>
+   <li><b>Ne pas apprendre ensemble des mots trop proches</b> (jours, couleurs, contraires) : ils se mélangent. L'application mélange les nouvelles cartes de plusieurs leçons (6 au plus par leçon et par jour).</li>
    <li><b>Pour un mot qui résiste</b> : la technique du mot-clé — un mot chinois ou anglais au son proche + une image mentale. Une case « astuce mémoire » apparaît sur les cartes ratées.</li>
-   <li><b>Des phrases entières</b> plutôt que des mots isolés quand c'est possible (kit de survie, petits textes mémorisés).</li>
-   <li><b>Commencer par le kit de survie</b> (~100 phrases) : de quoi se débrouiller dès les premières semaines.</li>
+   <li><b>Des phrases entières</b> plutôt que des mots isolés quand c'est possible (les phrases des dialogues, répétées à voix haute).</li>
    <li><b>Des objectifs courts</b> : la semaine en cours, pas « parler français ». Cochez, regardez vos barres avancer.</li></ul>
    <p class="mut">Source des principes : Paul Nation, <i>What do you need to know to learn a foreign language?</i> (Victoria University of Wellington, 2014).</p></div>`;
   $("#mm").onchange = e => { S.settings.minutes = +e.target.value; save(); renderMethod(); };

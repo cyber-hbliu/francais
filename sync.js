@@ -76,7 +76,7 @@ const AUDIO_REPO = "cyber-hbliu/francais-audio", AUDIO_CACHE = "fr-book-audio";
 const audioTok = () => { try { return localStorage.getItem("fr-audio-token"); } catch (e) { return null; } };
 window.bookAudioFallback = async (el, path) => {
   el.onerror = null;
-  // audio/comm/04.mp3 → comm/04.mp3 in the private repository (audio/gram and audio/voc likewise)
+  // audio/assimil/001.m4a → assimil/001.m4a in the private repository (audio/comm, gram, voc likewise)
   const t = audioTok(), file = path.replace(/^audio\//, ""); if (!t) return;
   try {
     const cache = window.caches ? await caches.open(AUDIO_CACHE) : null, key = "https://audio.local/" + file;
@@ -94,18 +94,18 @@ async function audioCheck() {
   const t = audioTok(); if (!t) { el.textContent = "Pas de jeton audio sur cet appareil."; return; }
   try {
     let n = 0;
-    for (const d of ["comm", "gram", "voc"]) {
+    for (const d of ["assimil", "comm", "gram", "voc"]) {
       const r = await fetch(`https://api.github.com/repos/${AUDIO_REPO}/contents/${d}`, { headers: { Authorization: "Bearer " + t, Accept: "application/vnd.github+json" } });
       if (r.status === 404) { const root = await fetch(`https://api.github.com/repos/${AUDIO_REPO}`, { headers: { Authorization: "Bearer " + t } }); if (!root.ok) throw new Error("dépôt introuvable (lancez publier-audio.sh, et donnez au jeton l'accès à francais-audio)"); continue; }
       if (!r.ok) throw new Error("GitHub " + r.status);
-      n += (await r.json()).filter(f => /\.mp3$/i.test(f.name)).length;
+      n += (await r.json()).filter(f => /\.(mp3|m4a)$/i.test(f.name)).length;
     }
     el.innerHTML = `✓ Accès au dépôt privé : ${n} fichier${n > 1 ? "s" : ""} audio.`;
   } catch (e) { el.innerHTML = `<span class="badc">Erreur : ${esc(e.message)}</span>`; }
 }
 function audioCard() {
   return `<div class="card" id="audcard"><h2>Audio du livre (dépôt privé)</h2>
-   <p class="mut" style="margin-top:0">Vos enregistrements du livre sont dans le dépôt <b>privé</b> ${AUDIO_REPO}, jamais sur le site public. Chaque appareil les télécharge une fois, puis les garde.</p>
+   <p class="mut" style="margin-top:0">Vos enregistrements d'Assimil sont dans le dépôt <b>privé</b> ${AUDIO_REPO}, jamais sur le site public. Chaque appareil les télécharge une fois, puis les garde.</p>
    <p id="audst" style="font-weight:600"></p>
    ${audioTok() ? `<div class="row"><button class="b s" onclick="audioOff()">Retirer le jeton audio</button></div>`
     : `<ol style="margin:8px 0 12px;padding-left:20px"><li>Créez un jeton « fine-grained » : <a target="_blank" rel="noopener" href="https://github.com/settings/personal-access-tokens/new">ouvrir la page GitHub</a>. Repository access : <b>Only select repositories</b> → francais-audio. Permissions → Contents : <b>Read-only</b>.</li>

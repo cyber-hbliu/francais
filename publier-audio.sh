@@ -1,6 +1,7 @@
 #!/bin/zsh
-# Uploads your own recordings of the three books to a PRIVATE GitHub repository,
+# Uploads your own recordings of the books to a PRIVATE GitHub repository,
 # so the hosted site can play them on every device that has an audio token:
+#   audio/assimil/  Assimil French, one file per lesson (001.m4a = lesson 1), made from « ASSIMIL French/L001-LESSON.mp3 »
 #   audio/comm/  Communication progressive (CD tracks: 04.mp3 = track 4)
 #   audio/gram/  Grammaire progressive
 #   audio/voc/   Vocabulaire progressif
@@ -11,13 +12,21 @@ REPO="cyber-hbliu/francais-audio"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 DEPOT="$ROOT/.audio-prive"
 mkdir -p "$DEPOT"
-for d in comm gram voc; do
-  if [ -d "$ROOT/audio/$d" ]; then mkdir -p "$DEPOT/$d"; rsync -a --delete --include='*.mp3' --exclude='*' "$ROOT/audio/$d/" "$DEPOT/$d/"; fi
+# the Assimil recordings, made smaller (AAC 64 kb/s, mono: about 100 MB for the 100 lessons) with macOS afconvert
+if [ -d "$ROOT/ASSIMIL French" ]; then
+  mkdir -p "$ROOT/audio/assimil"
+  for f in "$ROOT/ASSIMIL French"/L*-LESSON.mp3; do
+    n="$(basename "$f" | sed -E 's/^L([0-9]+)-.*/\1/')"; out="$ROOT/audio/assimil/$n.m4a"
+    [ -f "$out" ] || afconvert -f m4af -d aac -b 64000 -c 1 "$f" "$out"
+  done
+fi
+for d in assimil comm gram voc; do
+  if [ -d "$ROOT/audio/$d" ]; then mkdir -p "$DEPOT/$d"; rsync -a --delete --include='*.mp3' --include='*.m4a' --exclude='*' "$ROOT/audio/$d/" "$DEPOT/$d/"; fi
 done
 cd "$DEPOT"
 if [ ! -d .git ]; then
   git init -q -b main
-  printf 'Enregistrements personnels des livres (dépôt privé).\ncomm/, gram/, voc/ : numéro de piste du CD sur deux chiffres (04.mp3 = piste 4).\n' > LISEZMOI.txt
+  printf 'Enregistrements personnels des livres (dépôt privé).\nassimil/ : une leçon par fichier (001.m4a = leçon 1).\ncomm/, gram/, voc/ : numéro de piste du CD sur deux chiffres (04.mp3 = piste 4).\n' > LISEZMOI.txt
 fi
 git add -A
 git commit -qm "Audio des livres $(date +%F)" || echo "Rien de nouveau à envoyer."
@@ -27,4 +36,4 @@ else
   git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://github.com/$REPO.git"
   git push -u origin main
 fi
-echo "OK : $(find . -name '*.mp3' -not -path './.git/*' | wc -l | tr -d ' ') fichiers audio dans le dépôt privé $REPO"
+echo "OK : $(find . \( -name '*.mp3' -o -name '*.m4a' \) -not -path './.git/*' | wc -l | tr -d ' ') fichiers audio dans le dépôt privé $REPO"

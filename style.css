@@ -173,7 +173,7 @@ button.chip{border:0;cursor:pointer;font:inherit;font-size:14px}
 /* exercise sheets, correction, strands */
 .exs{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 .exi{font-weight:600;margin:12px 0 2px}
-.exq{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.exq>span:first-child{flex:1 1 260px}.exq input{flex:1 1 180px;width:auto}
+.exq{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.gapq,.rc{display:block;margin:10px 0}.exq>span:first-child{flex:1 1 260px}.exq input{flex:1 1 180px;width:auto}
 .exq button.b.s{min-height:36px;padding:0 12px;font-size:14px}.exr{flex-basis:100%;font-size:14px}.exr:empty{display:none}
 .corr textarea{font-size:17px;line-height:1.6}
 .diff{line-height:1.9;font-size:17px}.diff ins{background:#D7F0DF;text-decoration:none;border-radius:3px;padding:0 2px}.diff del{background:#FBD5D2;border-radius:3px;padding:0 2px}
@@ -200,3 +200,14 @@ button.chip{border:0;cursor:pointer;font:inherit;font-size:14px}
   body.focus,html:has(body.focus),#fbar{background:var(--bg)}
   img,canvas{filter:none}
 }
+/* Assimil lessons: the dialogue with its text hidden, in French only, or with the translation; the gaps of exercise 2 */
+.asd.hide p { display: none; }
+.asd.hide::before { content: "Texte caché : écoutez d'abord sans lire."; color: var(--mut); }
+.asd.fronly .en { display: none; }
+.asd .asn { display: inline-block; min-width: 1.6em; font-size: 13px; }
+.asd sup, .asnotes sup { font-size: 11px; color: var(--mut); }
+.asnotes p { margin: 0 0 10px; }
+input.gap { display: inline-block; width: auto; min-width: 4ch; padding: 2px 6px; margin: 2px 4px; font: inherit; }
+input.gap.ok { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+input.gap.ko { border-color: var(--bad); }
+.gapq p { line-height: 2; }

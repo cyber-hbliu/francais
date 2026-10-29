@@ -74,15 +74,22 @@ const BK_FIELDS = {
   gram: [["page", "Pages du livre", 1], ["rules", "Règles (une par ligne ; « … » pour surligner)", 8], ["examples", "Exemples (français | traduction)", 8], ["ex", "Exercices (« # consigne », puis un item par ligne : question | réponse du corrigé)", 12]],
   comm: [["page", "Pages du livre", 1], ["track", "Numéro(s) de piste du CD (un par dialogue : 4, 5)", 1], ["dlg", "Dialogue(s) — « Rôle : réplique » (| traduction) ; « --- » entre deux dialogues", 14], ["ex", "Manières de dire (français | traduction)", 8], ["task", "Activité « Communication » du livre (jeu de rôle)", 4], ["gbox", "Encadré « Grammaire » (sous le dialogue)", 4], ["vbox", "Encadré « Vocabulaire » (un mot par ligne, ou séparés par des virgules ; | traduction)", 5], ["remarque", "Remarque (culturelle ou de vocabulaire) ; « --- » entre deux dialogues", 3], ["acts", "Toutes les activités du livre (une par ligne : « 1. Compréhension. … », lignes suivantes = items)", 14]],
   vocab: [["page", "Pages du livre", 1], ["words", "Mots du livre — de l'Index : « mot (catégorie) | traduction »", 12], ["texte", "Texte (pages de gauche), une phrase ou un paragraphe par ligne", 12], ["exos", "Exercices (pages de droite) : « # consigne », puis « question | réponse du corrigé »", 12]],
+  assimil: [["page", "Pages du livre", 1], ["title", "Titre de la leçon", 1], ["titleEn", "Titre anglais", 1],
+    ["dlg", "Dialogue — une ligne par phrase, avec son numéro : « 1 - Monsieur, madame, vous désirez ? » (« - » = une autre personne parle) ; « _ » = liaison", 14],
+    ["trad", "Traduction — les mêmes numéros : « 1 - Sir, Madam, what would you like? »", 12], ["notes", "Notes — une note par ligne, avec son numéro", 12],
+    ["pron", "Prononciation (transcription du livre)", 3], ["ex1", "Exercice 1 — « phrase | traduction du corrigé », une par ligne", 6],
+    ["ex2", "Exercice 2 — « phrase anglaise | phrase française avec … pour chaque trou | mots manquants séparés par - »", 6],
+    ["culture", "Note culturelle", 3], ["rev", "Révision (leçons 7, 14, 21…) — un point par ligne", 10]],
   extra: [["page", "Pages du livre", 1], ["track", "Piste(s) du CD", 1], ["text", "Texte ou dialogue (« Rôle : réplique » | traduction)", 14], ["ex", "Exercices : « # consigne », puis « question | réponse du corrigé »", 10], ["acts", "Activités (une par ligne, items en retrait)", 8]],
 };
 const xcat = id => { const x = EXTRAS.find(e => e[0] === id); return { id, book: x[1], title: x[2], a: x[3], b: x[4], track: x[5] }; };
 const bkBook = (kind, n) => kind === "extra" ? xcat(n).book : kind; // whose PDF
-const bkUnit = (kind, n) => kind === "gram" ? LESSONS.find(l => l.n === n) : kind === "comm" ? COMM.find(c => c.n === n) : kind === "extra" ? xcat(n) : VP_UNITS[n - 1];
-const bkTitle = (kind, n) => { const u = bkUnit(kind, n); return kind === "extra" ? `${BOOKNAME[u.book].split(" du ")[0]} · ${u.title}` : (kind === "gram" ? `Grammaire ${n}` : kind === "comm" ? `Communication ${n}` : `Vocabulaire ${n}`) + " · " + u.title; };
+const bkUnit = (kind, n) => kind === "gram" ? LESSONS.find(l => l.n === n) : kind === "comm" ? COMM.find(c => c.n === n) : kind === "extra" ? xcat(n) : kind === "assimil" ? AS[n] : VP_UNITS[n - 1];
+const bkTitle = (kind, n) => { const u = bkUnit(kind, n); return kind === "extra" ? `${BOOKNAME[u.book].split(" du ")[0]} · ${u.title}` : (kind === "gram" ? `Grammaire ${n}` : kind === "comm" ? `Communication ${n}` : kind === "assimil" ? `Leçon ${n}` : `Vocabulaire ${n}`) + " · " + u.title; };
 const bkN = (kind, n) => kind === "extra" ? String(n) : +n;
 const bkPages = (kind, n) => {
   if (kind === "extra") { const x = xcat(n); return [x.a, x.b]; }
+  if (kind === "assimil") return AS_PAGES[n - 1];
   // a chapter ends before the next chapter, or before the « Exercices récapitulatifs » page when a bilan follows it
   if (kind === "gram") { const i = GTOC.findIndex(g => g[0] === n), bl = GBILANS.find(b => b[0] === n), next = bl ? bl[1] : GTOC[i + 1] ? GTOC[i + 1][3] : 152; return [GTOC[i][3], next - 1]; }
   if (kind === "comm") return COMM.find(c => c.n === n).bookPages;
@@ -122,6 +129,7 @@ window.addEventListener("load", () => {
   let r = null; try { r = JSON.parse(sessionStorage.getItem("fr-reopen")); sessionStorage.removeItem("fr-reopen"); } catch (x) { }
   if (!r) return;
   if (r.kind === "extra") return;
+  if (r.kind === "assimil") { setUnit(r.n); return; }
   if (r.kind === "gram") openLesson(LESSONS.find(l => l.n === r.n).id); else if (r.kind === "comm") openComm(r.n); else openUnit(r.n);
 });
 
@@ -138,7 +146,7 @@ window.pdfPut = async (kind, file) => {
   try { const db = await bkDB(); await new Promise(ok => { const t = db.transaction("pdf", "readwrite"); t.objectStore("pdf").put(file, kind); t.oncomplete = ok; t.onerror = ok; }); } catch (e) { }
 };
 async function bookDoc(kind) { if (BK_DOC[kind]) return BK_DOC[kind]; const f = await pdfGet(kind); return f ? (BK_DOC[kind] = await bkPdfDoc(f)) : null; }
-const BOOKNAME = { gram: "Grammaire progressive du français", comm: "Communication progressive du français", vocab: "Vocabulaire progressif du français" };
+const BOOKNAME = { gram: "Grammaire progressive du français", comm: "Communication progressive du français", vocab: "Vocabulaire progressif du français", assimil: "Assimil — French (With Ease, 2020)" };
 const pdfPicker = (kind, then, label) => `<label class="b s" style="cursor:pointer">${label || "Choisir le PDF de " + BOOKNAME[kind]}<input type="file" accept="application/pdf" hidden onchange="pdfPut('${kind}',this.files[0]).then(()=>{${then}})"></label>`;
 // the book's own pages (from your PDF), as images
 window.bookPagesView = async (el, kind, a, b) => {
@@ -222,18 +230,22 @@ function bkFillTracks() {
 // a wrong PDF was imported: remove what the import put in (« à vérifier »); the units you checked and saved yourself stay
 window.bkClear = kind => {
   const E = (S.book || {})[kind] || {}, dr = Object.keys(E).filter(n => E[n].draft && !E[n].cleared), ok = Object.values(E).filter(e => !e.draft).length;
-  if (!confirm(`Effacer les ${dr.length} unités importées (« à vérifier ») de ${BOOKNAME[kind]} ?` + (ok ? `\nLes ${ok} unités que vous avez vérifiées sont gardées.` : ""))) return;
-  const all = ok && confirm(`Effacer aussi les ${ok} unités que vous avez vérifiées ?\n(Utile si elles contiennent des erreurs de l'ancien import : elles seront importées de nouveau, « à vérifier ».)`);
-  Object.keys(E).filter(n => all ? !E[n].cleared : E[n].draft && !E[n].cleared).forEach(n => E[n] = { at: Date.now(), draft: true, cleared: true }); save(); location.reload();
+  const un = kind === "assimil" ? "leçons" : "unités";
+  if (!confirm(`Effacer les ${dr.length} ${un} importées (« à vérifier ») de ${BOOKNAME[kind]} ?` + (ok ? `\nLes ${ok} ${un} que vous avez vérifiées sont gardées.` : ""))) return;
+  const all = ok && confirm(`Effacer aussi les ${ok} ${un} que vous avez vérifiées ?\n(Utile si elles contiennent des erreurs de l'ancien import : elles seront importées de nouveau, « à vérifier ».)`);
+  Object.keys(E).filter(n => all ? !E[n].cleared : E[n].draft && !E[n].cleared).forEach(n => E[n] = { at: Date.now(), draft: true, cleared: true });
+  // Assimil: the lexicon goes with the lessons
+  const lx = ((S.book || {}).alex || {})[1]; if (kind === "assimil" && lx && !lx.cleared && (lx.draft || all)) S.book.alex[1] = { at: Date.now(), draft: true, cleared: true };
+  save(); location.reload();
 };
 // « Vos livres » card at the top of each book list: PDF on this device, whole-book import
 window.bookCard = kind => {
   const E = Object.fromEntries(Object.entries((S.book || {})[kind] || {}).filter(([, e]) => !e.cleared)), n = Object.keys(E).length, dr = Object.values(E).filter(e => e.draft).length;
   const id = "bkc_" + kind;
   setTimeout(async () => { const el = document.getElementById(id); if (!el) return; const f = await pdfGet(kind);
-    el.innerHTML = f ? `<span class="mut">PDF sur cet appareil : ${esc(f.name || "livre")}</span> <button class="b" onclick="bkImportAll('${kind}')">Importer tout le livre</button><button class="b s" onclick="bkStopAll()">Arrêter</button>${kind === "vocab" ? `<button class="b s" onclick="bkIndexOnly()">Importer l'index (les mots)</button>` : ""}${pdfPicker(kind, `go(tab)`, "Changer de PDF")}${n ? `<button class="b s" onclick="bkClear('${kind}')">Effacer l'import</button>` : ""}`
+    el.innerHTML = f ? `<span class="mut">PDF sur cet appareil : ${esc(f.name || "livre")}</span> <button class="b" onclick="${kind === "assimil" ? "asImportAll()" : `bkImportAll('${kind}')`}">Importer tout le livre</button><button class="b s" onclick="${kind === "assimil" ? "asStop()" : "bkStopAll()"}">Arrêter</button>${kind === "vocab" ? `<button class="b s" onclick="bkIndexOnly()">Importer l'index (les mots)</button>` : ""}${kind === "assimil" ? `<button class="b s" onclick="asLexOnly()">Importer le lexique (les mots)</button>` : ""}${pdfPicker(kind, `go(tab)`, "Changer de PDF")}${n ? `<button class="b s" onclick="bkClear('${kind}')">Effacer l'import</button>` : ""}`
       : pdfPicker(kind, `go(tab)`); }, 0);
-  return `<div class="card"><h3 style="margin-top:0">Le contenu du livre</h3><p class="mut" style="margin-top:0">${n} unités importées${dr ? ` dont ${dr} à vérifier` : ""}. L'import lit votre PDF dans ce navigateur (reconnaissance de caractères, quelques secondes par page) ; vérifiez ensuite chaque unité à côté de la page du livre.</p><div class="row" id="${id}"></div><p id="bkall_${kind}" class="mut"></p></div>`;
+  return `<div class="card"><h3 style="margin-top:0">Le contenu du livre</h3><p class="mut" style="margin-top:0">${n} ${kind === "assimil" ? "leçons" : "unités"} importées${dr ? ` dont ${dr} à vérifier` : ""}. ${kind === "assimil" ? "L'import lit le texte de votre PDF dans ce navigateur (environ une minute pour tout le livre) ; vérifiez ensuite chaque leçon à côté de la page du livre." : "L'import lit votre PDF dans ce navigateur (reconnaissance de caractères, quelques secondes par page) ; vérifiez ensuite chaque unité à côté de la page du livre."}</p><div class="row" id="${id}"></div><p id="bkall_${kind}" class="mut"></p></div>`;
 };
 let PDFJS = null, OCR = null;
 const libURL = f => new URL("lib/" + f, location.href).href;
@@ -290,6 +302,8 @@ window.bkImport = async (kind, n) => {
   n = bkN(kind, n); const st = t => { const el = $("#bkst"); if (el) el.textContent = t; };
   const p1 = +$("#bkp1").value, p2 = +$("#bkp2").value, off = PDF_OFFSET[bkBook(kind, n)] || 0;
   try {
+    if (kind === "assimil") { st("Lecture des pages de la leçon…"); const r = await asReadOne(n, st); if (!r) { st("Leçon introuvable dans ces pages."); return; }
+      Object.entries(r).forEach(([k, v]) => { const el = $("#bk_" + k); if (el && v) el.value = v; }); st("Import terminé : vérifiez chaque ligne avec votre livre, corrigez, puis « Enregistrer »."); return; }
     st("Ouverture du PDF…"); const doc = await bookDoc(bkBook(kind, n)), pages = [];
     if (!doc) { st("Choisissez d'abord le PDF du livre (à droite)."); return; }
     for (let p = p1; p <= p2; p++) { st(`Lecture de la page ${p}…`); pages.push(await bkPageText(doc, p + off, st)); }
