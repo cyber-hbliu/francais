@@ -98,7 +98,7 @@ window.doStep = (k, s) => {
   STEP = { k, s, strand: st[1], t: Date.now() };
 };
 // new cards: units reached so far (the current one once its dialogue has been heard), mixed across units, and at most
-// 6 a day from one unit, so that a topic's words (days, colours, fruit…) are spread over several days
+// 6 a day from each unit first (the day's total, 15–20, is set by newQuota), so that a topic's words (days, colours, fruit…) are spread over several days
 window.parcoursNew = () => {
   const cur = curUnit(), t0 = new Date().setHours(0, 0, 0, 0), lists = [];
   for (let k = 1; k <= cur; k++) {
@@ -107,7 +107,10 @@ window.parcoursNew = () => {
     lists.push({ ids: ids.filter(id => !card(id)).sort(wordOrder), left: Math.max(0, 6 - today) });
   }
   const out = []; let more = true;
-  while (more) { more = false; for (const l of lists.reverse()) if (l.left > 0 && l.ids.length) { out.push(l.ids.shift()); l.left--; more = true; } }
+  lists.reverse(); // the current unit first
+  while (more) { more = false; for (const l of lists) if (l.left > 0 && l.ids.length) { out.push(l.ids.shift()); l.left--; more = true; } }
+  // then the rest, so that the day's total (newQuota: 15–20) is reached even when a single unit has new words
+  for (const l of lists) out.push(...l.ids);
   return out;
 };
 
@@ -331,7 +334,7 @@ window.renderHome = () => {
 window.WU = 0;
 window.toggleCarnet = id => { S.carnet = S.carnet || {}; if (S.carnet[id]) delete S.carnet[id]; else S.carnet[id] = Date.now(); save(); const b = document.querySelector(`[data-cn="${id}"]`); if (b) b.textContent = S.carnet[id] ? "★" : "☆"; };
 const star = id => `<button class="b s starb" data-cn="${id}" title="Carnet d'erreurs" onclick="toggleCarnet('${id}')">${(S.carnet || {})[id] ? "★" : "☆"}</button>`;
-const wRow = id => { const v = ITEMS[id].v; return `<tr><td style="width:44px">${spk(v.fr)}</td><td><b>${frHTML(v.fr)}</b>${v.pos ? ` <span class="mut">(${esc(v.pos)})</span>` : ""}</td><td>${esc(v.en || "")}</td><td class="mut">${wordState2(v)}</td><td style="width:52px">${star(id)}</td></tr>`; };
+const wRow = id => { const v = ITEMS[id].v; return `<tr><td style="width:44px">${spk(v.fr)}</td><td><b>${frHTML(v.fr, v.pos)}</b>${v.pos ? ` <span class="mut">(${esc(v.pos)})</span>` : ""}</td><td>${esc(v.en || "")}</td><td class="mut">${wordState2(v)}</td><td style="width:52px">${star(id)}</td></tr>`; };
 window.renderUnitWords = () => {
   const k = WU || curUnit(), u = U(k), ids = unitWordIds(k);
   const groups = [["Vocabulaire progressif — les mots du livre", ids.filter(id => /^vp/.test(ITEMS[id].v.id))],
@@ -344,7 +347,7 @@ window.renderUnitWords = () => {
    ${k === curUnit() && k > 1 && !stepDone(k, "ecoute") ? `<p class="note">Écoutez d'abord le dialogue de l'unité : les mots s'apprennent mieux une fois rencontrés dans un texte.</p>` : ""}
    <p class="row"><button class="b" onclick="startReview('due')">Cartes du jour (${dueIds().length} à revoir · nouvelles mélangées)</button><button class="b s" onclick="startReview('pu:${k}')" ${ids.length ? "" : "disabled"}>Seulement cette unité</button>
     <input type="text" id="wq" placeholder="Rechercher dans tous les mots…" style="flex:1;min-width:200px"></p>
-   <p class="mut">Les nouvelles cartes viennent de toutes les unités déjà atteintes, au plus 6 par unité et par jour. ☆ = carnet d'erreurs.</p></div><div id="wres"></div>`;
+   <p class="mut">Les nouvelles cartes (15 à 20 par jour) viennent de toutes les unités déjà atteintes, mélangées : 6 par unité d'abord, puis le reste quand une seule unité a encore des mots nouveaux. ☆ = carnet d'erreurs.</p></div><div id="wres"></div>`;
   const list = () => groups.filter(g => g[1].length).map(([t, g]) => `<div class="card"><h3>${t}</h3><div style="overflow-x:auto"><table>${g.sort(wordOrder).map(wRow).join("")}</table></div></div>`).join("") || `<div class="card"><p class="mut">Pas encore de mots pour cette unité : importez l'index du Vocabulaire progressif et la Communication progressive (Plus → Livres).</p></div>`;
   const draw = () => { const q = $("#wq").value.trim().toLowerCase();
     $("#wres").innerHTML = !q ? list() : `<div class="card" style="overflow-x:auto"><table>${ALL.filter(id => ITEMS[id].kind === "v" && (ITEMS[id].v.fr + " " + ITEMS[id].v.en).toLowerCase().includes(q)).slice(0, 80).map(wRow).join("") || "<tr><td>Aucun résultat</td></tr>"}</table></div>`; };

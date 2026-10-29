@@ -92,7 +92,7 @@ const bkPages = (kind, n) => {
 const bkEntry = (kind, n) => { const e = ((S.book || {})[kind] || {})[n]; return e && !e.cleared ? e : undefined; }; // « cleared »: an import you erased (kept as a marker so a sync doesn't bring it back)
 window.saisieBtn = (kind, n) => { const e = bkEntry(kind, n); return `<button class="b s" onclick="openSaisie('${kind}','${n}')">${!e ? "Saisir le contenu du livre" : e.draft ? "Vérifier avec le livre" : "Modifier la saisie"}</button>`; };
 // lists: « à saisir » (nothing yet), « à vérifier » (imported, not yet checked against the page)
-window.aSaisir = (kind, n) => { const e = bkEntry(kind, n); return !e ? ` <span class="tag">à saisir</span>` : e.draft ? ` <span class="tag">à vérifier</span>` : ""; };
+window.aSaisir = (kind, n) => { const e = bkEntry(kind, n); return !e ? ` <span class="tag">à saisir</span>` : e.draft ? ` <span class="tag">à vérifier</span>` : e.fresh ? ` <span class="tag">nouveaux champs à vérifier</span>` : ""; };
 window.notEntered = (kind, n) => { const [a, b] = bkPages(kind, n);
   return `<div class="card"><h2>${esc(bkTitle(kind, n))}</h2><p>Livre p. ${a}–${b}. Le contenu de cette unité n'est pas encore saisi : seul le texte de votre livre est utilisé ici.</p><div class="row">${saisieBtn(kind, n)}</div></div>`; };
 
@@ -166,10 +166,15 @@ window.bkImportAll = async kind => {
   BK_STOP = false; S.book = S.book || {}; S.book[kind] = S.book[kind] || {}; let done = 0;
   for (const n of units) {
     if (BK_STOP) break;
-    const old = S.book[kind][n]; if (old && !old.draft) { done++; continue; }
+    const old = S.book[kind][n], checked = old && !old.draft && !old.cleared;
+    // a unit you checked: nothing you saved is touched, only its empty fields are filled (new fields, e.g. the boxes)
+    if (checked && BK_FIELDS[kind].every(([f]) => f === "page" || f === "words" || String(old[f] || "").trim())) { done++; continue; }
     const [a, b] = bkPages(kind, n), pages = [];
     for (let p = a; p <= b; p++) { st(`${bkTitle(kind, n)} · page ${p} · ${done}/${units.length} unités`); pages.push(await bkPageText(doc, p + (PDF_OFFSET[kind] || 0), () => { })); }
-    const r = BK_PARSE[kind](pages, n, a), e = { at: Date.now(), draft: true, page: a + "–" + b };
+    const r = BK_PARSE[kind](pages, n, a);
+    if (checked) { const added = BK_FIELDS[kind].map(([f]) => f).filter(f => f !== "page" && f !== "words" && !String(old[f] || "").trim() && String(r[f] || "").trim());
+      added.forEach(f => old[f] = r[f]); if (added.length) { old.fresh = [...new Set((old.fresh || []).concat(added))]; old.at = Date.now(); } save(); done++; continue; }
+    const e = { at: Date.now(), draft: true, page: a + "–" + b };
     BK_FIELDS[kind].forEach(([f]) => { if (f !== "page") e[f] = r[f] || ""; });
     if (kind === "vocab" && old && old.words && !old.cleared) e.words = old.words; // the words come from the Index import
     S.book[kind][n] = e; save(); done++;
@@ -218,7 +223,8 @@ function bkFillTracks() {
 window.bkClear = kind => {
   const E = (S.book || {})[kind] || {}, dr = Object.keys(E).filter(n => E[n].draft && !E[n].cleared), ok = Object.values(E).filter(e => !e.draft).length;
   if (!confirm(`Effacer les ${dr.length} unités importées (« à vérifier ») de ${BOOKNAME[kind]} ?` + (ok ? `\nLes ${ok} unités que vous avez vérifiées sont gardées.` : ""))) return;
-  dr.forEach(n => E[n] = { at: Date.now(), draft: true, cleared: true }); save(); location.reload();
+  const all = ok && confirm(`Effacer aussi les ${ok} unités que vous avez vérifiées ?\n(Utile si elles contiennent des erreurs de l'ancien import : elles seront importées de nouveau, « à vérifier ».)`);
+  Object.keys(E).filter(n => all ? !E[n].cleared : E[n].draft && !E[n].cleared).forEach(n => E[n] = { at: Date.now(), draft: true, cleared: true }); save(); location.reload();
 };
 // « Vos livres » card at the top of each book list: PDF on this device, whole-book import
 window.bookCard = kind => {
@@ -306,7 +312,8 @@ window.bkImportIndex = async (doc, st) => {
     rows.forEach(l => {
       const m = l.match(/^(.+?)\s*\(([^)]{1,24})\)\s*([\d][\d,\s]*)$/); if (!m) return;
       const pg = m[3].split(/[,\s]+/).map(Number).filter(x => x >= 6 && x < 150); if (!pg.length) return;
-      const u = ends.find(([, a, b]) => pg[0] >= a && pg[0] <= b); if (!u) return;
+      const first = pg.find(x => x % 2 === 0) || pg[0]; // left pages (even) are the text, right pages the exercises
+      const u = ends.find(([, a, b]) => first >= a && first <= b); if (!u) return;
       (units[u[0]] = units[u[0]] || []).push(`${m[1].trim()} (${m[2].trim()})`);
     });
   }

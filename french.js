@@ -26,8 +26,10 @@ function countdown(sec, el, onEnd) {
 }
 
 // ---------- gender colouring ----------
-function genderOf(fr) {
+function genderOf(fr, pos) {
   const s = fr.trim();
+  if (pos && /^n\.\s?m\.$/.test(pos.trim())) return "m"; // the Vocabulaire Index: « (n.m.) », « (n.f.) »
+  if (pos && /^n\.\s?f\.$/.test(pos.trim())) return "f";
   if (/^(le|un)\s/i.test(s) || /\(m\.?\)|\(m\.? ?pl\.?\)/i.test(s)) return "m";
   if (/^(la|une)\s/i.test(s) || /\(f\.?\)|\(f\.? ?pl\.?\)/i.test(s)) return "f";
   return "";
@@ -189,7 +191,7 @@ window.openDictee = () => {
 function nounPool() {
   const out = [];
   VOCAB.filter(v => reachedVocab(v.unit)).forEach(v => {
-    const g = genderOf(v.fr); if (!g || /[,;/]/.test(v.fr)) return;
+    const g = genderOf(v.fr, v.pos); if (!g || /[,;/]/.test(v.fr)) return;
     const noun = v.fr.replace(/^(le|la|un|une)\s+/i, "").replace(/\s*\((m|f)\.?\s*(pl\.?)?\)\s*/gi, " ").trim();
     if (/^(l'|les )/i.test(noun) || noun.split(" ").length > 3) return;
     out.push({ noun, g, fr: v.fr, en: v.en, id: "v:" + v.id });
@@ -310,7 +312,7 @@ window.openPho = (n, planId) => {
   view.innerHTML = back + `<div class="card"><span class="tag">Prononciation ${n}/13</span><span class="tag">Français interactif</span><h2>${esc(p.title)}</h2>
    <p class="mut">Écoutez, imitez à voix haute (« shadowing »), enregistrez-vous et comparez. Les sons difficiles pour un sinophone : /y/ ≠ /u/ (tu ≠ tout), le /R/, les voyelles nasales, le e muet, la liaison.</p>
    <p style="white-space:pre-line">${esc(p.intro.split("\n").slice(1).join("\n"))}</p></div>` +
-    p.items.map((it, k) => `<div class="card"><audio controls preload="none" src="${it.u}" style="width:100%"></audio>
+    p.items.filter((it, k, a) => !k || it.u !== a[k - 1].u).map((it, k) => `<div class="card"><audio controls preload="none" src="${it.u}" style="width:100%"></audio>
      <p style="white-space:pre-line">${esc(it.t)}</p><p>${recWidget("ph" + k)}</p></div>`).join("") +
     `<p class="row"><button class="b ok" onclick="S.ustep=S.ustep||{};S.ustep[curUnit()+':pho1']=Date.now();save();go('today')">✓ Leçon terminée</button><a target="_blank" rel="noopener" href="https://www.laits.utexas.edu/fi/html/pho/${String(n).padStart(2, "0")}.html">Page originale</a></p>`;
 };

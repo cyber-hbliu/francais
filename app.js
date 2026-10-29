@@ -199,8 +199,8 @@ window.openLesson = id => {
 };
 // ---------- Vocab ----------
 const wordState2 = v => { const c = card("v:" + v.id); return !c ? "nouveau" : c.interval >= 21 ? "✅ acquis" : c.lapses > 1 ? "⚠️ difficile" : "en cours"; };
-const frHTML = fr => { const g = window.genderOf ? genderOf(fr) : ""; return g ? `<span class="g-${g}">${esc(fr)}</span>` : esc(fr); };
-const wordRow = v => `<tr><td>${spk(v.fr)}</td><td><b>${frHTML(v.fr)}</b></td><td>${esc(v.en)}</td><td class="mut">${wordState2(v)}</td></tr>`;
+const frHTML = (fr, pos) => { const g = window.genderOf ? genderOf(fr, pos) : ""; return g ? `<span class="g-${g}">${esc(fr)}</span>` : esc(fr); };
+const wordRow = v => `<tr><td>${spk(v.fr)}</td><td><b>${frHTML(v.fr, v.pos)}</b></td><td>${esc(v.en)}</td><td class="mut">${wordState2(v)}</td></tr>`;
 function renderVocab() {
   view.innerHTML = bookCard("vocab") + `<div class="card"><h2>Vocabulaire — kit de survie + 28 unités</h2>
    <p><a href="#" onclick="openSurvival();return false"><b>0. Kit de survie</b></a> <span class="mut">${SURVIVAL.length} phrases essentielles — à apprendre en premier</span></p>
