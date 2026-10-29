@@ -22,7 +22,7 @@ const bkKey = w => stripAccB(String(w).toLowerCase().replace(/\(.*?\)/g, "").rep
 const stripAccB = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 window.applyBook = S => {
-  const B = S.book || {};
+  const B = {}; for (const [k, units] of Object.entries(S.book || {})) B[k] = Object.fromEntries(Object.entries(units).filter(([, e]) => !e.cleared));
   Object.entries(B.gram || {}).forEach(([n, e]) => {
     const l = LESSONS.find(x => x.n === +n); if (!l) return;
     l.rules = bkLines(e.rules); l.examples = bkLines(e.examples).map(bkPair);
@@ -68,7 +68,7 @@ const bkPages = (kind, n) => {
   const i = n - 1; return [VTOC[i][2], (VTOC[i + 1] ? VTOC[i + 1][2] : 150) - 1];
 };
 // entry button for a unit page; « à saisir » tag for lists
-const bkEntry = (kind, n) => ((S.book || {})[kind] || {})[n];
+const bkEntry = (kind, n) => { const e = ((S.book || {})[kind] || {})[n]; return e && !e.cleared ? e : undefined; }; // « cleared »: an import you erased (kept as a marker so a sync doesn't bring it back)
 window.saisieBtn = (kind, n) => { const e = bkEntry(kind, n); return `<button class="b s" onclick="openSaisie('${kind}',${n})">${!e ? "Saisir le contenu du livre" : e.draft ? "Vérifier avec le livre" : "Modifier la saisie"}</button>`; };
 // lists: « à saisir » (nothing yet), « à vérifier » (imported, not yet checked against the page)
 window.aSaisir = (kind, n) => { const e = bkEntry(kind, n); return !e ? ` <span class="tag">à saisir</span>` : e.draft ? ` <span class="tag">à vérifier</span>` : ""; };
@@ -117,7 +117,7 @@ window.pdfPut = async (kind, file) => {
 };
 async function bookDoc(kind) { if (BK_DOC[kind]) return BK_DOC[kind]; const f = await pdfGet(kind); return f ? (BK_DOC[kind] = await bkPdfDoc(f)) : null; }
 const BOOKNAME = { gram: "Grammaire progressive du français", comm: "Communication progressive du français", vocab: "Vocabulaire progressif du français" };
-const pdfPicker = (kind, then) => `<label class="b s" style="cursor:pointer">Choisir le PDF de ${BOOKNAME[kind]}<input type="file" accept="application/pdf" hidden onchange="pdfPut('${kind}',this.files[0]).then(()=>{${then}})"></label>`;
+const pdfPicker = (kind, then, label) => `<label class="b s" style="cursor:pointer">${label || "Choisir le PDF de " + BOOKNAME[kind]}<input type="file" accept="application/pdf" hidden onchange="pdfPut('${kind}',this.files[0]).then(()=>{${then}})"></label>`;
 // the book's own pages (from your PDF), as images
 window.bookPagesView = async (el, kind, a, b) => {
   if (!el) return; el.id = el.id || "bkv" + Math.random().toString(36).slice(2);
@@ -178,12 +178,18 @@ function bkFillTracks() {
   seq.forEach(x => { if (!x.e || !x.e.draft) return; const t = String(x.e.track || "").split(/\s*,\s*/); while (t.length < x.n) t.push(""); t[x.k] = x.t === null ? "" : String(x.t); x.e.track = t.join(", "); });
   save();
 }
+// a wrong PDF was imported: remove what the import put in (« à vérifier »); the units you checked and saved yourself stay
+window.bkClear = kind => {
+  const E = (S.book || {})[kind] || {}, dr = Object.keys(E).filter(n => E[n].draft && !E[n].cleared), ok = Object.values(E).filter(e => !e.draft).length;
+  if (!confirm(`Effacer les ${dr.length} unités importées (« à vérifier ») de ${BOOKNAME[kind]} ?` + (ok ? `\nLes ${ok} unités que vous avez vérifiées sont gardées.` : ""))) return;
+  dr.forEach(n => E[n] = { at: Date.now(), draft: true, cleared: true }); save(); location.reload();
+};
 // « Vos livres » card at the top of each book list: PDF on this device, whole-book import
 window.bookCard = kind => {
-  const E = (S.book || {})[kind] || {}, n = Object.keys(E).length, dr = Object.values(E).filter(e => e.draft).length;
+  const E = Object.fromEntries(Object.entries((S.book || {})[kind] || {}).filter(([, e]) => !e.cleared)), n = Object.keys(E).length, dr = Object.values(E).filter(e => e.draft).length;
   const id = "bkc_" + kind;
   setTimeout(async () => { const el = document.getElementById(id); if (!el) return; const f = await pdfGet(kind);
-    el.innerHTML = f ? `<span class="mut">PDF sur cet appareil : ${esc(f.name || "livre")}</span> <button class="b" onclick="bkImportAll('${kind}')">Importer tout le livre</button><button class="b s" onclick="bkStopAll()">Arrêter</button>`
+    el.innerHTML = f ? `<span class="mut">PDF sur cet appareil : ${esc(f.name || "livre")}</span> <button class="b" onclick="bkImportAll('${kind}')">Importer tout le livre</button><button class="b s" onclick="bkStopAll()">Arrêter</button>${pdfPicker(kind, `go(tab)`, "Changer de PDF")}${n ? `<button class="b s" onclick="bkClear('${kind}')">Effacer l'import</button>` : ""}`
       : pdfPicker(kind, `go(tab)`); }, 0);
   return `<div class="card"><h3 style="margin-top:0">Le contenu du livre</h3><p class="mut" style="margin-top:0">${n} unités importées${dr ? ` dont ${dr} à vérifier` : ""}. L'import lit votre PDF dans ce navigateur (reconnaissance de caractères, quelques secondes par page) ; vérifiez ensuite chaque unité à côté de la page du livre.</p><div class="row" id="${id}"></div><p id="bkall_${kind}" class="mut"></p></div>`;
 };
