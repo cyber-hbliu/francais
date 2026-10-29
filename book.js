@@ -25,14 +25,16 @@ window.applyBook = S => {
   const B = S.book || {};
   Object.entries(B.gram || {}).forEach(([n, e]) => {
     const l = LESSONS.find(x => x.n === +n); if (!l) return;
-    l.rules = bkLines(e.rules); l.examples = bkLines(e.examples).map(bkPair); l.ex = bkLines(e.ex).map(bkPair);
+    l.rules = bkLines(e.rules); l.examples = bkLines(e.examples).map(bkPair);
+    let inst = ""; l.ex = [];
+    bkLines(e.ex).forEach(x => { if (x.startsWith("#")) inst = x.replace(/^#\s*/, ""); else l.ex.push(bkPair(x).concat(inst)); });
     l.bookPage = e.page || ""; l.entered = !!(l.rules.length || l.examples.length || l.ex.length);
   });
   Object.entries(B.comm || {}).forEach(([n, e]) => {
     const c = COMM.find(x => x.n === +n); if (!c) return;
     const parts = String(e.dlg || "").split(/^\s*-{3,}\s*$/m), tracks = String(e.track || "").split(/[,;\s]+/).filter(Boolean);
     c.dlgs.forEach((d, k) => { d.lines = bkDialogue(parts[k]); d.track = tracks[k] || ""; });
-    c.ex = bkLines(e.ex).map(bkPair); c.task = (e.task || "").trim(); c.bookPage = e.page || "";
+    c.ex = bkLines(e.ex).map(bkPair); c.task = (e.task || "").trim(); c.acts = e.acts || ""; c.bookPage = e.page || "";
     c.entered = c.dlgs.some(d => d.lines.length);
     c.ex.forEach(([fr, en], k) => { const v = { id: `cm${c.n}_${k}`, unit: "c" + c.n, sec: "c" + c.n, theme: `Communication ${c.n} · ${c.title}`, fr, en, level: c.level, audio: "", src: "livre" }; COMM_PHRASES.push(v); VOCAB.push(v); });
   });
@@ -54,8 +56,8 @@ window.applyBook = S => {
 
 // ---------------- entry page (Saisir le contenu du livre) ----------------
 const BK_FIELDS = {
-  gram: [["page", "Pages du livre", 1], ["rules", "Règles (une par ligne ; « … » pour surligner)", 8], ["examples", "Exemples (français | traduction)", 8], ["ex", "Exercices (question | réponse ; réponse du corrigé)", 10]],
-  comm: [["page", "Pages du livre", 1], ["track", "Numéro(s) de piste du CD (un par dialogue : 4, 5)", 1], ["dlg", "Dialogue(s) — « Rôle : réplique » (| traduction) ; « --- » entre deux dialogues", 14], ["ex", "Manières de dire (français | traduction)", 8], ["task", "Activité du livre (jeu de rôle / communication)", 4]],
+  gram: [["page", "Pages du livre", 1], ["rules", "Règles (une par ligne ; « … » pour surligner)", 8], ["examples", "Exemples (français | traduction)", 8], ["ex", "Exercices (« # consigne », puis un item par ligne : question | réponse du corrigé)", 12]],
+  comm: [["page", "Pages du livre", 1], ["track", "Numéro(s) de piste du CD (un par dialogue : 4, 5)", 1], ["dlg", "Dialogue(s) — « Rôle : réplique » (| traduction) ; « --- » entre deux dialogues", 14], ["ex", "Manières de dire (français | traduction)", 8], ["task", "Activité « Communication » du livre (jeu de rôle)", 4], ["acts", "Toutes les activités du livre (une par ligne : « 1. Compréhension. … », lignes suivantes = items)", 14]],
   vocab: [["page", "Pages du livre", 1], ["words", "Mots du livre (français | traduction)", 14]],
 };
 const bkUnit = (kind, n) => kind === "gram" ? LESSONS.find(l => l.n === n) : kind === "comm" ? COMM.find(c => c.n === n) : VP_UNITS[n - 1];
@@ -66,29 +68,30 @@ const bkPages = (kind, n) => {
   const i = n - 1; return [VTOC[i][2], (VTOC[i + 1] ? VTOC[i + 1][2] : 150) - 1];
 };
 // entry button for a unit page; « à saisir » tag for lists
-window.saisieBtn = (kind, n) => `<button class="b s" onclick="openSaisie('${kind}',${n})">${(bkUnit(kind, n) || {}).entered ? "Modifier la saisie" : "Saisir le contenu du livre"}</button>`;
-window.aSaisir = (kind, n) => (bkUnit(kind, n) || {}).entered ? "" : ` <span class="tag">à saisir</span>`;
+const bkEntry = (kind, n) => ((S.book || {})[kind] || {})[n];
+window.saisieBtn = (kind, n) => { const e = bkEntry(kind, n); return `<button class="b s" onclick="openSaisie('${kind}',${n})">${!e ? "Saisir le contenu du livre" : e.draft ? "Vérifier avec le livre" : "Modifier la saisie"}</button>`; };
+// lists: « à saisir » (nothing yet), « à vérifier » (imported, not yet checked against the page)
+window.aSaisir = (kind, n) => { const e = bkEntry(kind, n); return !e ? ` <span class="tag">à saisir</span>` : e.draft ? ` <span class="tag">à vérifier</span>` : ""; };
 window.notEntered = (kind, n) => { const [a, b] = bkPages(kind, n);
   return `<div class="card"><h2>${esc(bkTitle(kind, n))}</h2><p>Livre p. ${a}–${b}. Le contenu de cette unité n'est pas encore saisi : seul le texte de votre livre est utilisé ici.</p><div class="row">${saisieBtn(kind, n)}</div></div>`; };
 
 window.openSaisie = (kind, n) => {
   if (window.stopActivity) stopActivity();
-  const e = ((S.book || {})[kind] || {})[n] || {}, [a, b] = bkPages(kind, n), off = PDF_OFFSET[kind] || 0;
+  const e = bkEntry(kind, n) || {}, [a, b] = bkPages(kind, n);
   view.innerHTML = `<p class="backlink"><a href="#" onclick="go(tab);return false">← Retour</a></p>
-  <div class="card"><h1>Saisie · ${esc(bkTitle(kind, n))}</h1><p class="mut">Copiez le texte de votre livre (p. ${a}–${b}). Une ligne par élément.</p>
-   <div class="card" style="background:var(--bg)"><h3 style="margin-top:0">Importer depuis le PDF</h3>
-    <p class="mut" style="margin-top:0">Choisissez le PDF de votre livre : il est lu dans ce navigateur (texte du PDF, ou reconnaissance de caractères pour un livre scanné), rien n'est envoyé. Vérifiez et corrigez le résultat, puis enregistrez.</p>
-    <div class="row"><input type="file" id="bkpdf" accept="application/pdf"><label>Pages du livre <input id="bkp1" type="number" value="${a}" style="width:70px"> à <input id="bkp2" type="number" value="${b}" style="width:70px"></label>
-     <label>décalage PDF <input id="bkoff" type="number" value="${off}" style="width:60px"></label><button class="b" onclick="bkImport('${kind}',${n})">Importer depuis le PDF</button></div>
-    <p id="bkst" class="mut"></p></div>
+  <h1>${e.draft ? "Vérification" : "Saisie"} · ${esc(bkTitle(kind, n))}</h1><p class="sub">Livre p. ${a}–${b} · comparez chaque ligne avec la page du livre, à droite, et corrigez.</p>
+  <div class="bkgrid"><div class="card">
+   <div class="row"><button class="b s" onclick="bkImport('${kind}',${n})">Lire ces pages dans le PDF</button><label class="mut">p. <input id="bkp1" type="number" value="${a}" style="width:64px"> à <input id="bkp2" type="number" value="${b}" style="width:64px"></label></div>
+   <p id="bkst" class="mut"></p>
    ${BK_FIELDS[kind].map(([f, label, rows]) => `<label style="display:block;margin:12px 0 4px;font-weight:600">${label}</label>${rows === 1 ? `<input id="bk_${f}" value="${esc(e[f] || (f === "page" ? a + "–" + b : ""))}" style="width:100%">` : `<textarea id="bk_${f}" rows="${rows}" style="width:100%;font:inherit">${esc(e[f] || "")}</textarea>`}`).join("")}
-   <div class="row" style="margin-top:14px"><button class="b" onclick="bkSave('${kind}',${n})">Enregistrer</button><button class="b s" onclick="go(tab)">Annuler</button></div></div>`;
-  if (BK_PDF[kind]) $("#bkst").textContent = "PDF déjà choisi : " + BK_PDF[kind].name + " (ou choisissez-en un autre).";
+   <div class="row" style="margin-top:14px"><button class="b" onclick="bkSave('${kind}',${n})">${e.draft ? "✓ Vérifié, enregistrer" : "Enregistrer"}</button><button class="b s" onclick="go(tab)">Annuler</button></div></div>
+   <div id="bkpages" class="bkpages"></div></div>`;
+  bookPagesView($("#bkpages"), kind, a, b);
   scrollTo(0, 0);
 };
 window.bkSave = (kind, n) => {
   S.book = S.book || {}; S.book[kind] = S.book[kind] || {};
-  const e = { at: Date.now() }; BK_FIELDS[kind].forEach(([f]) => e[f] = $("#bk_" + f).value);
+  const e = { at: Date.now() }; BK_FIELDS[kind].forEach(([f]) => e[f] = $("#bk_" + f).value); // saved by you = checked (no « draft »)
   S.book[kind][n] = e; save();
   try { sessionStorage.setItem("fr-reopen", JSON.stringify({ kind, n })); } catch (x) { }
   setTimeout(() => location.reload(), 300); // rebuild the cards from the new entry (after the sync push is scheduled)
@@ -101,7 +104,78 @@ window.addEventListener("load", () => {
 });
 
 // ---------------- PDF import: pdf.js for a text layer, tesseract.js (French) for scanned pages — all local, in lib/ ----------------
-const BK_PDF = {};
+const BK_PDF = {}, BK_DOC = {};
+// the PDF of each book is kept in this browser (IndexedDB), chosen once per device: pages are shown and read from it
+const bkDB = () => new Promise((ok, ko) => { const r = indexedDB.open("fr-books", 1); r.onupgradeneeded = () => r.result.createObjectStore("pdf"); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); });
+async function pdfGet(kind) {
+  if (BK_PDF[kind]) return BK_PDF[kind];
+  try { const db = await bkDB(); return await new Promise(ok => { const q = db.transaction("pdf").objectStore("pdf").get(kind); q.onsuccess = () => ok(BK_PDF[kind] = q.result || null); q.onerror = () => ok(null); }); } catch (e) { return null; }
+}
+window.pdfPut = async (kind, file) => {
+  if (!file) return; BK_PDF[kind] = file; delete BK_DOC[kind];
+  try { const db = await bkDB(); await new Promise(ok => { const t = db.transaction("pdf", "readwrite"); t.objectStore("pdf").put(file, kind); t.oncomplete = ok; t.onerror = ok; }); } catch (e) { }
+};
+async function bookDoc(kind) { if (BK_DOC[kind]) return BK_DOC[kind]; const f = await pdfGet(kind); return f ? (BK_DOC[kind] = await bkPdfDoc(f)) : null; }
+const BOOKNAME = { gram: "Grammaire progressive du français", comm: "Communication progressive du français", vocab: "Vocabulaire progressif du français" };
+const pdfPicker = (kind, then) => `<label class="b s" style="cursor:pointer">Choisir le PDF de ${BOOKNAME[kind]}<input type="file" accept="application/pdf" hidden onchange="pdfPut('${kind}',this.files[0]).then(()=>{${then}})"></label>`;
+// the book's own pages (from your PDF), as images
+window.bookPagesView = async (el, kind, a, b) => {
+  if (!el) return; el.id = el.id || "bkv" + Math.random().toString(36).slice(2);
+  const doc = await bookDoc(kind);
+  if (!doc) { el.innerHTML = `<div class="card"><p style="margin-top:0">Pour voir les pages du livre ici, choisissez son PDF sur cet appareil (une seule fois ; il reste dans ce navigateur).</p>${pdfPicker(kind, `bookPagesView(document.getElementById('${el.id}'),'${kind}',${a},${b})`)}</div>`; return; }
+  el.innerHTML = "";
+  for (let p = a; p <= b; p++) {
+    const pg = await doc.getPage(p + (PDF_OFFSET[kind] || 0)), w = Math.min(900, el.clientWidth || 600), vp0 = pg.getViewport({ scale: 1 }), sc = w / vp0.width * (devicePixelRatio || 1), vp = pg.getViewport({ scale: sc });
+    const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height; cv.style.width = "100%"; cv.setAttribute("aria-label", "Livre page " + p);
+    const fig = document.createElement("figure"); fig.className = "bkpage"; fig.innerHTML = `<figcaption>p. ${p}</figcaption>`; fig.prepend(cv); el.appendChild(fig);
+    await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp, intent: "print" }).promise;
+  }
+};
+// a « Pages du livre » card for unit pages; drawn on demand (rendering is heavy on a phone)
+window.bookPagesCard = (kind, n) => { const [a, b] = bkPages(kind, n), id = "bkp" + kind + n;
+  return `<div class="card"><div class="row" style="justify-content:space-between"><h3 style="margin:0">Pages du livre · p. ${a}–${b}</h3><button class="b s" onclick="this.remove();bookPagesView(document.getElementById('${id}'),'${kind}',${a},${b})">Afficher les pages</button></div><div id="${id}" class="bkpages" style="margin-top:12px"></div></div>`; };
+
+// import a whole book: every unit is read and parsed, saved as « à vérifier » (draft); units you already checked are kept
+let BK_STOP = false;
+window.bkImportAll = async kind => {
+  const st = t => { const el = document.getElementById("bkall_" + kind); if (el) el.textContent = t; };
+  const doc = await bookDoc(kind); if (!doc) { st("Choisissez d'abord le PDF."); return; }
+  const units = kind === "gram" ? LESSONS.map(l => l.n) : kind === "comm" ? COMM.map(c => c.n) : VP_UNITS.map(u => u.n);
+  BK_STOP = false; S.book = S.book || {}; S.book[kind] = S.book[kind] || {}; let done = 0;
+  for (const n of units) {
+    if (BK_STOP) break;
+    const old = S.book[kind][n]; if (old && !old.draft) { done++; continue; }
+    const [a, b] = bkPages(kind, n), pages = [];
+    for (let p = a; p <= b; p++) { st(`${bkTitle(kind, n)} · page ${p} · ${done}/${units.length} unités`); pages.push(await bkPageText(doc, p + (PDF_OFFSET[kind] || 0), () => { })); }
+    const r = BK_PARSE[kind](pages, n, a), e = { at: Date.now(), draft: true, page: a + "–" + b };
+    BK_FIELDS[kind].forEach(([f]) => { if (f !== "page") e[f] = r[f] || ""; });
+    S.book[kind][n] = e; save(); done++;
+  }
+  if (kind === "comm") bkFillTracks();
+  st(BK_STOP ? `Arrêté : ${done}/${units.length} unités. Relancez pour continuer.` : `Terminé : ${done} unités importées. Rechargement…`);
+  if (!BK_STOP) setTimeout(() => location.reload(), 800);
+};
+window.bkStopAll = () => { BK_STOP = true; };
+// CD tracks run in order through the book: a track the OCR missed is the one after the previous dialogue (or before the next)
+function bkFillTracks() {
+  const E = S.book.comm || {}, seq = [];
+  COMM.forEach(c => { const e = E[c.n]; const t = e ? String(e.track || "").split(/\s*,\s*/) : []; c.dlgs.forEach((d, k) => seq.push({ e, k, n: c.dlgs.length, t: /^\d+$/.test(t[k] || "") ? +t[k] : null })); });
+  // no track read anywhere: the CD has the credits on track 1, then one track per dialogue (Communication 2 = 4 and 5)
+  if (!seq.some(x => x.t !== null)) seq[0].t = 2;
+  for (let i = 1; i < seq.length; i++) if (seq[i].t === null && seq[i - 1].t !== null) seq[i].t = seq[i - 1].t + 1;
+  for (let i = seq.length - 2; i >= 0; i--) if (seq[i].t === null && seq[i + 1].t !== null && seq[i + 1].t > 1) seq[i].t = seq[i + 1].t - 1;
+  seq.forEach(x => { if (!x.e || !x.e.draft) return; const t = String(x.e.track || "").split(/\s*,\s*/); while (t.length < x.n) t.push(""); t[x.k] = x.t === null ? "" : String(x.t); x.e.track = t.join(", "); });
+  save();
+}
+// « Vos livres » card at the top of each book list: PDF on this device, whole-book import
+window.bookCard = kind => {
+  const E = (S.book || {})[kind] || {}, n = Object.keys(E).length, dr = Object.values(E).filter(e => e.draft).length;
+  const id = "bkc_" + kind;
+  setTimeout(async () => { const el = document.getElementById(id); if (!el) return; const f = await pdfGet(kind);
+    el.innerHTML = f ? `<span class="mut">PDF sur cet appareil : ${esc(f.name || "livre")}</span> <button class="b" onclick="bkImportAll('${kind}')">Importer tout le livre</button><button class="b s" onclick="bkStopAll()">Arrêter</button>`
+      : pdfPicker(kind, `go(tab)`); }, 0);
+  return `<div class="card"><h3 style="margin-top:0">Le contenu du livre</h3><p class="mut" style="margin-top:0">${n} unités importées${dr ? ` dont ${dr} à vérifier` : ""}. L'import lit votre PDF dans ce navigateur (reconnaissance de caractères, quelques secondes par page) ; vérifiez ensuite chaque unité à côté de la page du livre.</p><div class="row" id="${id}"></div><p id="bkall_${kind}" class="mut"></p></div>`;
+};
 let PDFJS = null, OCR = null;
 const libURL = f => new URL("lib/" + f, location.href).href;
 async function bkPdfDoc(file) {
@@ -122,11 +196,12 @@ async function bkPageText(doc, p, st) {
   tc.items.forEach(i => { const y = Math.round(i.transform[5] / 3); (rows[y] = rows[y] || []).push(i); });
   const txt = Object.keys(rows).sort((a, b) => b - a).map(y => rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(i => i.str).join(" ").replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
   const toks = txt.split(/\s+/), single = toks.filter(t => t.length === 1).length / Math.max(1, toks.length);
-  if (txt.length > 200 && single < 0.15) return txt;
+  if (txt.length > 200 && single < 0.05 && !/\b\w \w \w\b/.test(txt)) return txt; // a clean text layer; otherwise OCR
   st(`Page ${p} : reconnaissance des caractères…`);
   const vp = page.getViewport({ scale: 2.2 }), cv = document.createElement("canvas");
   cv.width = vp.width; cv.height = vp.height;
-  await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+  // « print » intent: rendered without requestAnimationFrame, so the import keeps going when the page is in the background
+  await page.render({ canvasContext: cv.getContext("2d"), viewport: vp, intent: "print" }).promise;
   const w = await bkOcr(), r = await w.recognize(cv, {}, { text: true, blocks: true });
   return bkOcrText(r.data.blocks || []);
 }
@@ -154,11 +229,10 @@ window.bkOcrText = blocks => {
 
 window.bkImport = async (kind, n) => {
   const st = t => { const el = $("#bkst"); if (el) el.textContent = t; };
-  const f = $("#bkpdf").files[0] || BK_PDF[kind]; if (!f) { st("Choisissez d'abord le PDF du livre."); return; }
-  BK_PDF[kind] = f;
-  const p1 = +$("#bkp1").value, p2 = +$("#bkp2").value, off = +$("#bkoff").value || 0;
+  const p1 = +$("#bkp1").value, p2 = +$("#bkp2").value, off = PDF_OFFSET[kind] || 0;
   try {
-    st("Ouverture du PDF…"); const doc = await bkPdfDoc(f), pages = [];
+    st("Ouverture du PDF…"); const doc = await bookDoc(kind), pages = [];
+    if (!doc) { st("Choisissez d'abord le PDF du livre (à droite)."); return; }
     for (let p = p1; p <= p2; p++) { st(`Lecture de la page ${p}…`); pages.push(await bkPageText(doc, p + off, st)); }
     const r = BK_PARSE[kind](pages, n, p1);
     Object.entries(r).forEach(([k, v]) => { const el = $("#bk_" + k); if (el && v) el.value = v; });
@@ -199,6 +273,18 @@ function bkCommPage(txt, sit, k, n) {
   }
   return { lines, track, ex };
 }
+// every activity of an Activités page: « 2. Grammaire. Complétez. » then its items, one per line
+function bkActs(txt) {
+  const out = [];
+  txt.split("\n").map(l => bkClean(l.replace(NUMS, ""))).filter(l => lettersOf(l) >= 2).forEach(l => {
+    // the red number of an activity is often lost by the OCR: the heading word is enough, activities are numbered in order
+    const h = l.match(/^(?:\(?\d{1,2}\)?\s+)?((?:Compréhension|Grammaire|Vocabulaire|Communication|Phonétique|Prononciation|Expression|Production|Écrit|Oral|Lexique)(?: et [a-zé]+)?)\s*\.\s*(.*)$/);
+    if (h) out.push(`${out.filter(x => /^\d+\. /.test(x)).length + 1}. ${h[1]}. ${h[2]}`.trim());
+    else if (/^À vous/.test(l)) out.push(`${out.filter(x => /^\d+\. /.test(x)).length + 1}. ${l}`);
+    else if (out.length && !/^A\s?C\s?T\s?I\s?V|^\d+\s*[•.]?\s*[a-zé-]+$|photocopie/i.test(l)) l.split(/\s(?=\d{1,2}\.\s)/).forEach(l => out.push("   " + l.replace(/\s+[oO0]{1,2}(?=\s|$)/g, "").replace(/_{2,}/g, "____")));
+  });
+  return out;
+}
 function bkTasks(txt) {
   const out = []; let on = false;
   txt.split("\n").map(l => bkClean(l.replace(NUMS, ""))).filter(Boolean).forEach(l => {
@@ -214,28 +300,39 @@ window.BK_PARSE = {
   // Dialogue = « Rôle : … » lines after the situation title, until the Grammaire / Vocabulaire boxes; then the
   // « Manières de dire » items; on the Activités page, the « Communication. … » activities.
   comm(pages, n, p1) {
-    const c = COMM.find(x => x.n === n), dlgs = [], tracks = [], ex = [], task = [];
+    const c = COMM.find(x => x.n === n), dlgs = [], tracks = [], ex = [], task = [], acts = [];
     c.dlgs.forEach((d, k) => {
       let i = d.page - p1; if (i < 0 || i >= pages.length) i = 2 * k; if (i >= pages.length) return;
       const r = bkCommPage(pages[i] || "", d.sit, k, n);
       dlgs.push(r.lines.join("\n")); tracks.push(r.track); ex.push(...r.ex);
-      task.push(...bkTasks(pages[i + 1] || ""));
+      task.push(...bkTasks(pages[i + 1] || "")); acts.push(...bkActs(pages[i + 1] || ""));
     });
     // the CD tracks follow each other: a track the OCR missed is the one after the previous dialogue's
     const prev = Object.values((S.book || {}).comm || {}).length && (S.book.comm[n - 1] || {}).track;
     tracks.forEach((t, k) => { if (!t) { const p = k ? tracks[k - 1] : String(prev || "").split(/[,;\s]+/).filter(Boolean).pop(); if (/^\d+$/.test(p || "")) tracks[k] = String(+p + 1); } });
-    return { dlg: dlgs.join("\n---\n"), track: tracks.join(", "), ex: [...new Set(ex)].join("\n"), task: task.join("\n") };
+    return { dlg: dlgs.join("\n---\n"), track: tracks.join(", "), ex: [...new Set(ex)].join("\n"), task: task.join("\n"), acts: acts.join("\n") };
   },
   // Grammaire: left page = lesson (rules and examples together, to sort by hand), right page = numbered exercises
+  // exercises: « # consigne » lines, then one numbered item per line (two-column items are split)
   gram(pages) {
     const ex = [], rules = [];
-    pages.forEach((t, i) => t.split("\n").map(bkClean).filter(Boolean).forEach(l => {
+    pages.forEach((t, i) => t.split("\n").map(l => bkClean(l.replace(NUMS, ""))).filter(Boolean).forEach(l => {
       if (/^\d+\s*[•.]?\s*[a-zé-]+$/i.test(l)) return; // page number « 8 • huit »
-      if (i % 2) { if (/^\d{1,2}[.)]/.test(l) || !ex.length) ex.push(l); else ex[ex.length - 1] += " " + l; }
+      if (i % 2) l.split(/\s(?=\d{1,2}\.\s)/).forEach(x => { if (/^\d{1,2}[.)]/.test(x)) ex.push(x); else if (ex.length && !ex[ex.length - 1].startsWith("#") && lettersOf(x) < 25) ex[ex.length - 1] += " " + x; else ex.push("# " + x); });
       else rules.push(l);
     }));
     return { rules: rules.join("\n"), ex: ex.join("\n") };
   },
   // Vocabulaire: the words in bold / at the start of lines are not marked in the text, so every line is kept to sort by hand
-  vocab(pages) { return { words: pages.join("\n").split("\n").map(bkClean).filter(l => l && !/^\d+\s*[•.]?\s*[a-zé-]+$/i.test(l)).join("\n") }; },
+  // Vocabulaire: the words given with their article (« une pomme de terre, un oignon… »), in the order of the book
+  vocab(pages) {
+    const out = [];
+    const ART = "(?:[Ll]e|[Ll]a|[Ll]es|[Uu]n|[Uu]ne|[Dd]es|[Dd]u|[Ll]'|[Dd]e la|[Dd]e l')";
+    // two columns of labels end up on one line: « une pomme un pamplemousse » → two words; headings in capitals and sentences are left out
+    pages.join("\n").split("\n").map(l => bkClean(l.replace(NUMS, ""))).forEach(l => l.split(/[,;•]|\s[–—-]\s/).flatMap(x => x.split(new RegExp("\\s(?=" + ART + "\\s?[a-zà-ÿ])"))).forEach(x => {
+      x = x.replace(/^[^A-Za-zÀ-ÿ]+|[.…:!?)]+$/g, "").trim();
+      if (new RegExp("^" + ART + "\\s?[a-zà-ÿ][a-zà-ÿ'-]*(\\s[a-zà-ÿ'-]+){0,3}$").test(x) && x.length <= 40 && !/\s(est|sont|a|ont|et|ou)(\s|$)/.test(x)) out.push(x.replace(/^(\S+)/, m => m.toLowerCase()));
+    }));
+    return { words: [...new Set(out)].join("\n") };
+  },
 };

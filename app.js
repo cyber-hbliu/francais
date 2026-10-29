@@ -33,7 +33,7 @@ Object.keys(S.todo).forEach(k => { const m = k.match(/^((?!tv5:).+):w\d+$/); if 
 // ---------- cards ----------
 const ITEMS = {};
 VOCAB.forEach(v => ITEMS["v:" + v.id] = { id: "v:" + v.id, kind: "v", v, theme: v.theme, unit: v.unit, level: v.level });
-LESSONS.forEach(l => l.ex.forEach((e, i) => ITEMS[`g:${l.id}:${i}`] = { id: `g:${l.id}:${i}`, kind: "g", l, q: e[0], a: e[1], theme: "Grammaire: " + l.title, level: l.level }));
+LESSONS.forEach(l => l.ex.forEach((e, i) => ITEMS[`g:${l.id}:${i}`] = { id: `g:${l.id}:${i}`, kind: "g", l, q: e[0], a: e[1], inst: e[2] || "", theme: "Grammaire: " + l.title, level: l.level }));
 const ALL = Object.keys(ITEMS);
 const card = id => S.cards[id];
 const isMature = id => card(id) && card(id).interval >= 21;
@@ -218,7 +218,7 @@ function streak() {
 
 // ---------- Learn ----------
 function renderLearn() {
-  view.innerHTML = `<div class="card"><h2>Grammaire — 60 unités + 8 bilans</h2><p class="mut">Ordre des unités de la Grammaire progressive du français (débutant). <span class="tag">A2</span> = point qui relève déjà du niveau A2.</p>` +
+  view.innerHTML = `${bookCard("gram")}<div class="card"><h2>Grammaire — 60 unités + 8 bilans</h2><p class="mut">Ordre des unités de la Grammaire progressive du français (débutant). <span class="tag">A2</span> = point qui relève déjà du niveau A2.</p>` +
     BILANS.map((b, bi) => LESSONS.filter(l => l.n >= b[0] && l.n <= b[1]).map(l => {
       const ids = l.ex.map((_, i) => `g:${l.id}:${i}`), m = ids.filter(isMature).length, seen = ids.filter(id => card(id)).length;
       return `<div class="todo"><div style="flex:1"><b>${l.n}.</b> <a href="#" onclick="openLesson('${l.id}');return false">${esc(l.title)}</a> ${l.level === "A2" ? '<span class="tag">A2</span>' : ""}${aSaisir("gram", l.n)} <span class="mut">p. ${l.page}${l.entered ? ` · ${seen}/${ids.length} vus · ${m} acquis` : ""}</span></div></div>`;
@@ -241,7 +241,7 @@ window.openLesson = id => {
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === "learn"));
   track("lesson", "Leçon: " + l.title);
   const head = `<p class="backlink"><a href="#" onclick="go('learn');return false">← Grammaire</a></p>`;
-  if (!l.entered) { view.innerHTML = head + notEntered("gram", l.n); scrollTo(0, 0); return; }
+  if (!l.entered) { view.innerHTML = head + notEntered("gram", l.n) + bookPagesCard("gram", l.n); scrollTo(0, 0); return; }
   view.innerHTML = head + `<div class="card"><span class="tag">Chapitre ${l.n}</span><span class="tag">${l.level}</span><span class="tag">Livre p. ${esc(l.bookPage || l.page)}</span><h2>${esc(l.title)}</h2>
    <p class="mut" style="margin-top:0">${l.subs.map(esc).join(" · ")}</p>
    <ul>${l.rules.map(r => `<li>${hl(r)}</li>`).join("")}</ul></div>
@@ -249,7 +249,7 @@ window.openLesson = id => {
   <div class="card"><p>Faites les exercices <b>à voix haute</b> avant de taper la réponse. Puis écoutez le petit dialogue de Tex sur le même point :
    <a target="_blank" rel="noopener" href="${TEX}?s=${encodeURIComponent(l.subs[0].replace(/[«»]/g, "").split(/[;:(]/)[0].trim())}">Tex's French Grammar · ${esc(l.subs[0])}</a> · ${fiLink(l.fi)}</p></div>
   <p class="row">${l.ex.length ? `<button class="b" onclick="startReview('lesson:${l.id}')">Pratiquer (${l.ex.length} exercices)</button>` : ""}
-  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>`;
+  <button class="b s" onclick="markLesson('${l.id}')">Marquer la séance comme terminée</button>${saisieBtn("gram", l.n)}</p>${bookPagesCard("gram", l.n)}`;
   scrollTo(0, 0);
 };
 window.markLesson = id => { PLAN.filter(p => p.type === "lesson" && p.target === id).forEach(p => S.todo[p.id] = { done: true, at: Date.now() }); save(); go("today"); };
@@ -260,7 +260,7 @@ const wordState2 = v => { const c = card("v:" + v.id); return !c ? "nouveau" : c
 const frHTML = fr => { const g = window.genderOf ? genderOf(fr) : ""; return g ? `<span class="g-${g}">${esc(fr)}</span>` : esc(fr); };
 const wordRow = v => `<tr><td>${spk(v.fr)}</td><td><b>${frHTML(v.fr)}</b></td><td>${esc(v.en)}</td><td class="mut">${wordState2(v)}</td></tr>`;
 function renderVocab() {
-  view.innerHTML = `<div class="card"><h2>Vocabulaire — kit de survie + 28 unités</h2>
+  view.innerHTML = bookCard("vocab") + `<div class="card"><h2>Vocabulaire — kit de survie + 28 unités</h2>
    <p><a href="#" onclick="openSurvival();return false"><b>0. Kit de survie</b></a> <span class="mut">${SURVIVAL.length} phrases essentielles — à apprendre en premier</span></p>
    <p class="mut">Unités du Vocabulaire progressif du français (débutant) : d'abord les mots du livre que vous avez saisis, puis les mots complémentaires de Français interactif (UT Austin, CC BY 3.0) avec leurs enregistrements.</p>
    <input type="text" id="vq" placeholder="Rechercher un mot (français ou anglais)…"></div>
@@ -288,6 +288,7 @@ window.openUnit = n => {
    <p class="row"><button class="b" onclick="startReview('unit:${n}')">Étudier (${ws.length} mots)</button><button class="b s" onclick="markUnit(${n})">Marquer la séance comme terminée</button>${saisieBtn("vocab", n)}</p>
    <p class="mut">🎧 = enregistrement original de Français interactif (toute la liste lue par un locuteur natif). 🔊 = un seul mot, voix française de votre appareil.</p></div>
   <div class="card"><h3>Vocabulaire progressif — les mots du livre</h3>${u.book.length ? `<div style="overflow-x:auto"><table>${u.book.map(wordRow).join("")}</table></div><p class="mut">🎧 sur la carte = le même mot dans Français interactif.</p>` : `<p>Pas encore saisis.</p>`}</div>
+  ${bookPagesCard("vocab", n)}
   <h2 style="margin:20px 0 8px">Français interactif — mots complémentaires</h2>` +
     u.secs.filter(si => VOCAB.some(v => v.sec === si)).map(si => { const s = FI_VOC[si]; return `<div class="card"><h3>${esc(s.title)} <span class="mut">· FI ch. ${String(s.ch).padStart(2, "0")}</span></h3>
      ${s.audio ? `<audio controls preload="none" src="${s.audio}" style="width:100%"></audio>` : ""}
@@ -395,7 +396,7 @@ function nextCard() {
     };
   } else {
     view.innerHTML = progressBar() + `<div class="card"><span class="tag">${it.l.level}</span><span class="tag">${esc(it.l.title)}</span>
-     <div class="big" style="font-size:22px">${esc(it.q)}</div>
+     ${it.inst ? `<p class="mut" style="margin:8px 0 0">${esc(it.inst)}</p>` : ""}<div class="big" style="font-size:22px">${esc(it.q)}</div>
      <p><input type="text" id="inp" autocomplete="off" autocapitalize="off" placeholder="Votre réponse"></p>
      <p class="row"><button class="b" id="chk">Vérifier</button></p><div id="ans"></div></div>`;
     const inp = $("#inp"); inp.focus();

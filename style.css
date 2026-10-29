@@ -134,3 +134,10 @@ button.mic.rec{animation:pulse 1.2s infinite}
   .ln .ctl{padding-left:0}
   .nextblock h1{font-size:28px}
 }
+
+/* entry page: the form beside the book's own pages */
+.bkgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+.bkpages{display:flex;flex-direction:column;gap:12px}
+.bkpage{margin:0;background:#fff;border:1px solid var(--line,#E4E4E0);border-radius:8px;overflow:hidden}
+.bkpage figcaption{font-size:13px;color:var(--mut);padding:4px 10px}
+@media (max-width:900px){.bkgrid{grid-template-columns:minmax(0,1fr)}}
