@@ -1,27 +1,34 @@
-# Boîte à outils française
+# Français pas à pas
 
-A personal, offline-first web app for learning French from zero, built on **Assimil — French** (With Ease series, by Anthony Bulger, 2020: 100 lessons, one a day), with the free material of **Français interactif** (UT Austin) on the same topics, and on the learning principles of Paul Nation.
+A personal study app for **Assimil French With Ease (2020)** + the **Assimil French Phrasebook** + **Français interactif** (UT Austin), built on Paul Nation's four strands and designed for an ADHD brain: one clear next action, short timed steps, breaks between blocks, no streak guilt.
 
-**Open it:** https://cyber-hbliu.github.io/francais-boite-a-outils/
+## Run it
 
-## What it does
+```bash
+node serve.js          # then open http://127.0.0.1:8137
+```
 
-- **Ma leçon:** the 100 lessons of Assimil, one a day, in the book's order (every 7th lesson a revision). Lessons 1–49 are the receptive phase; from lesson 50 the second wave adds, each day, the lesson of 49 days before, from the English translation back to French. Each lesson has eight steps, about a quarter of the time for each of Nation's four strands; the time of each step is counted for its strand.
-- **Steps:** listen (without the text, with the French, with the translation) · Français interactif (the recorded word list of the topic, a pronunciation lesson in lessons 1–15, a listening exercise) · the book's notes · sentence-by-sentence repetition (the recording stops at its pauses) · exercises 1 and 2 (exercise 2 with one field per gap, checked against the book's answers) · cards · output (say the dialogue again from its translation, the second wave, writing corrected and rewritten from memory) · fluency (the previous lessons faster, retelling 3/2/1½).
-- **Cards:** spaced repetition on the book's lexicon, each word in the lesson where it first appears; new cards mixed across the lessons reached so far, at most 6 a day from one lesson. Français interactif words can be added with ☆.
-- **Writing:** a daily journal on a monthly calendar; copy for correction, paste the corrected text back, rewrite from memory, compared word by word.
-- **Progress:** learning curve, four-strand balance against 25 %, the end of the course projected from the last 7 days' pace.
-- **Sync:** progress is merged between devices through a private GitHub Gist in your own account (Plus → Sauvegarde). Recordings stay on the device that made them.
+(or double-click `start.command`). The small server exists because the lesson audio needs HTTP range requests for the "repeat this sentence" feature. Everything else is plain HTML/JS; progress is stored in your browser (Settings → Export backup).
 
-Everything runs in the browser. Progress lives in `localStorage`, recordings in IndexedDB.
+## What's inside
 
-## Content and credits
+| Page | What it does |
+|---|---|
+| **Today** | One big button. Shows today's lesson, the four 30-minute blocks, the week strip, the cards due. "Low-energy day" = 15-minute version. |
+| **Session** | Walks through the day one step at a time (listen ×2 closed book → with English → with French → FI → notes → sentence-by-sentence repeat → cards → exercises → retell → write → fluency re-listen → timed read-aloud → 3/2/1½ monologue with recording). Timer per step, break screens between blocks, resumable. |
+| **Cards** | Spaced repetition on words taken from each lesson (verbs as short sentences, gender with the article, Chinese gloss, English cognate hint, false-friend warnings, optional keyword mnemonic). 15 new per day. Closed sets (days, months, colours, numbers, family…) are held back so no more than 2 per set per week enter, to avoid interference. ☆ on any phrasebook or FI item adds it. |
+| **Lessons** | All 100 lessons: dialogue with audio, translation, notes, exercises 1–2 (interactive), cards, retell. Link to the PDF page for checking. |
+| **Phrasebook** | The 21 mini-lessons and all situation sections, with voice, search, cover-the-English testing and drills. |
+| **FI** | Français interactif word lists, listening exercises and pronunciation lessons with their recordings, by chapter (chapter of the week highlighted). |
+| **Sounds** | Mandarin→French pronunciation priorities, minimal-pair listening quiz, cognate patterns and false friends, editable speaking scripts. |
+| **Writing** | Your texts, "copy for correction" prompt, paste-back corrected version with a word diff. |
+| **Progress** | Weekly curves (new cards, lessons, listening minutes, words written), four-strand balance, mock-exam log, the "solid A1" checklist. |
+| **Plan** | Your 8-week table, shifting with the lesson you're on. |
 
-- **Assimil — French (not included).** This repository only holds the lesson titles and page numbers (`assimil.js`). The text of each lesson — dialogue, translation, notes, exercises — and the lexicon are imported from your own PDF, read in your browser (Plus → Livres), and checked by you next to the book's page. They stay in your browser and your private Gist. Your recordings go in `ASSIMIL French/` and `audio/assimil/` (ignored by git; `publier-audio.sh` copies them to a private repository so the hosted site can play them).
-- **Earlier books.** The app first used *Grammaire progressive*, *Vocabulaire progressif* and *Communication progressive du français, débutant* (CLE International); their tables of contents are still in `book_toc.js`, no longer used by the course.
-- **PDF import:** pdf.js (Mozilla, Apache 2.0) and tesseract.js with the French model (Apache 2.0), in `lib/`.
-- **Français interactif** (University of Texas at Austin, COERLL / LAITS), CC BY 3.0 — vocabulary lists and the recordings in `audio/fi/`. https://www.laits.utexas.edu/fi/
-- **Dictionary** (`dict.js`): English Wiktionary via kaikki.org, CC BY-SA 4.0; frequencies, genders and inflected forms from Lexique 3.83 (Boris New & Christophe Pallier), CC BY-SA 4.0. `dict.js` is distributed under CC BY-SA 4.0.
-- **Font:** Inter, SIL Open Font License 1.1.
-- **Method:** Paul Nation, *What do you need to know to learn a foreign language?* (Victoria University of Wellington, 2014).
-- Speech for single words, and for dialogues without a book recording, uses the browser's built-in French voices (two voices: the first role, then the others).
+Keyboard: `Space` reveal/play, `1–4` rate a card, `S` say the card, `P` park a stray thought.
+
+## Files and data
+
+- `assimil audio/`, `utexas audio/`: your recordings (not modified).
+- `data/lessons.js`, `data/phrase.js`: text cleaned from your two PDFs (OCR noise repaired). `data/fi.js`: Français interactif lists. Rebuild with `tools/build-data.js`.
+- Lesson/phrasebook text and recordings are copyrighted by Assimil: keep this folder private.

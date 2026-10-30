@@ -1,40 +1,49 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Boîte à outils française</title>
-<link rel="stylesheet" href="fonts/inter.css">
-<link rel="stylesheet" href="style.css?v=33">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Français pas à pas</title>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<header>
-  <div class="hwrap">
-  <div class="brand">Boîte à outils</div>
-  <nav id="nav" aria-label="Navigation principale">
-    <button data-tab="today">Ma leçon</button>
-    <button data-tab="mots">Mots</button>
-    <button data-tab="journal">Journal</button>
-    <button data-tab="more">Plus</button>
+<div id="app">
+  <nav id="nav" aria-label="Main">
+    <a class="brand" href="#/"><span>🇫🇷</span><b>Français<br>pas à pas</b></a>
+    <a href="#/" data-r="^/$"><i>🎯</i><span>Today</span></a>
+    <a href="#/cards" data-r="^/cards"><i>🃏</i><span>Cards</span></a>
+    <a href="#/lessons" data-r="^/lessons?"><i>📖</i><span>Lessons</span></a>
+    <a href="#/phrase" data-r="^/phrase"><i>💬</i><span>Phrasebook</span></a>
+    <a href="#/fi" data-r="^/fi"><i>🎧</i><span>FI</span></a>
+    <a href="#/lab" data-r="^/lab"><i>👄</i><span>Sounds</span></a>
+    <a href="#/write" data-r="^/write"><i>✍️</i><span>Writing</span></a>
+    <a href="#/progress" data-r="^/progress"><i>📈</i><span>Progress</span></a>
+    <a href="#/plan" data-r="^/plan"><i>🗓</i><span>Plan</span></a>
+    <a href="#/settings" data-r="^/settings"><i>⚙️</i><span>Settings</span></a>
   </nav>
-  </div>
-</header>
-<main id="view"></main>
-<script src="fi_data.js?v=33"></script>
-<script src="fi_pho.js?v=33"></script>
-<script src="method.js?v=33"></script>
-<script src="book_toc.js?v=33"></script>
-<script src="comm.js?v=33"></script>
-<script src="data.js?v=33"></script>
-<script src="book.js?v=33"></script>
-<script src="assimil.js?v=33"></script>
-<script src="freq.js?v=33"></script>
-<script src="app.js?v=33"></script>
-<script src="planner.js?v=33"></script>
-<script src="dico.js?v=33"></script>
-<script src="french.js?v=33"></script>
-<script src="runner.js?v=33"></script>
-<script src="units.js?v=33"></script>
-<script src="sync.js?v=33"></script>
+  <main id="main" tabindex="-1"></main>
+</div>
+<button id="park" title="Park a distracting thought (P)" aria-label="Park a thought">💭</button>
+
+<script src="data/lessons.js"></script>
+<script src="data/phrase.js"></script>
+<script src="data/fi.js"></script>
+<script src="js/core.js"></script>
+<script src="js/media.js"></script>
+<script src="js/srs.js"></script>
+<script src="js/plan.js"></script>
+<script src="js/content.js"></script>
+<script src="js/views/today.js"></script>
+<script src="js/views/cards.js"></script>
+<script src="js/views/session.js"></script>
+<script src="js/views/lessons.js"></script>
+<script src="js/views/phrase.js"></script>
+<script src="js/views/fi.js"></script>
+<script src="js/views/lab.js"></script>
+<script src="js/views/write.js"></script>
+<script src="js/views/progress.js"></script>
+<script src="js/views/plan-view.js"></script>
+<script src="js/views/settings.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
