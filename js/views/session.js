@@ -67,10 +67,11 @@ STEPS["listen-fr"] = ctx => {
 STEPS["fi-context"] = ctx => {
   const f = fiForDay(ctx.n), kids = []; if (ctx.step.all) f.items = fiItems(f.ch);
   const players = [];
+  const w = fiWeb(f.ch), vids = daySlice(fiVideos(w), (ctx.n - 1) % 7, ctx.step.all);
   kids.push(h("p.instr", `Week ${weekOf(ctx.n)} uses Français interactif ${f.week.fiName ? "chapitre " + f.week.fiName : "chapitre " + f.ch}.`),
-    h("div.card.tint", h("p", h("b", "En contexte video: "), "open the chapter on the FI site and watch the scene once, without stopping. Then once more with the transcript if you like."),
-      h("a.btn.primary", { href: FI_URL, target: "_blank", rel: "noopener" }, "Open Français interactif ↗")));
-  if (!f.items.length) kids.push(h("p.muted", "No recorded lists left for this day. Watch or re-watch the chapter video."));
+    h("div.card", h("h3", "En contexte video" + (vids.length > 1 ? "s" : "")), h("p.small.muted", "Watch each one once without stopping. Then again with French subtitles (CC) if you like."), videoPicker(vids),
+      w.pdf["videos-voc"] ? h("p.small.muted", "Transcripts: ", h("a", { href: w.pdf["videos-voc"], target: "_blank", rel: "noopener" }, "vocabulaire en contexte (PDF) ↗")) : null));
+  if (!f.items.length) kids.push(h("p.muted.small", "No word lists for this day."));
   f.items.forEach(it => {
     if (it.t === "voc") {
       const v = it.ref, p = v.audio ? audioPlayer(fiAudio(v.audio)) : null; if (p) players.push(p);
@@ -78,7 +79,7 @@ STEPS["fi-context"] = ctx => {
         v.words.length ? h("table", v.words.map(w => h("tr", h("td.fr", { style: { fontSize: "1.05rem" } }, w[0]), h("td.muted", w[1]), h("td", sayBtn(w[0].replace(/\(.*?\)/g, "")), h("button.icon", { title: "Add to my cards", onclick: () => addCustomCard({ fr: w[0].replace(/\s*\(.*?\)\s*$/, ""), en: w[1], src: "fi" }) }, "☆")))) ) : null));
     } else {
       const x = it.ref, p = audioPlayer(fiAudio(x.u)); players.push(p);
-      kids.push(h("div.card", h("h3", "Listening: " + x.t), h("p.small.muted", "Listen first without help. The exercise sheet is on the FI site, in the same chapter."), p.el));
+      kids.push(h("div.card", h("h3", "Listening: " + x.t), h("p.small.muted", "Listen first without help. The exercise sheet is in the chapter PDF."), p.el));
     }
   });
   return { el: h("div.stack", kids), destroy: () => players.forEach(p => p.stop()) };
@@ -93,10 +94,11 @@ STEPS.shadow = ctx => {
     lia, p.gaps.length < 2 ? h("p.small.muted", "(No clear pauses were detected in this recording; it plays normally.)") : null, p.el, dialogueView(ctx.L, { fr: true, en: false })), destroy: () => { p.stop(); document.removeEventListener("keydown", space); } };
 };
 STEPS["fi-gram"] = ctx => {
-  const wk = weekInfo(weekOf(ctx.n));
-  return h("div.stack", h("p.instr", "Français interactif grammar with Tex (", h("i", "la grammaire de Tex"), ") for this week:"),
-    h("div.card.tint", h("h3", wk.grammar), h("p.small.muted", `Chapter ${wk.fiName || wk.fi}. Read the grammar page and try the first exercises. Don’t aim to master it today; meet it.`), h("a.btn.primary", { href: FI_URL, target: "_blank", rel: "noopener" }, "Open Français interactif ↗")),
-    h("p.small.muted", "Then say three example sentences aloud that use this week’s pattern."));
+  const wk = weekInfo(weekOf(ctx.n)), w = fiWeb(wk.fi), rev = isReviewDay(ctx.n), g = daySlice(w.gram, (ctx.n - 1) % 7, rev);
+  return h("div.stack", h("p.instr", "Grammar with Tex (", h("i", "la grammaire de Tex"), "), chapter ", wk.fiName || wk.fi, ". Assimil this week: ", h("b", wk.grammar), "."),
+    h("p.small.muted", "Read the page and do its short exercises. Don’t aim to master it today; meet it. Then say three example sentences aloud."),
+    gramPicker(g.length ? g : w.gram.slice(0, 1)),
+    rev && w.quiz ? h("div.card", h("h3", "Testez-vous! Chapitre " + String(wk.fi).padStart(2, "0")), h("p.small.muted", "The chapter’s self-check quiz. Do the topics you met this week."), framePane(w.quiz, "Testez-vous", { tall: true })) : null);
 };
 STEPS.cards = ctx => {
   const spec = { n: Math.min(ctx.n, NL), noNew: !!ctx.step.backlog, newLimit: ctx.step.lite ? 5 : undefined, maxReviews: ctx.step.backlog ? 200 : 60 };

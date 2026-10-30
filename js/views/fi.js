@@ -8,8 +8,20 @@ route(/^\/fi(?:\/(\d+))?$/, (main, chStr) => {
     players.forEach(p => p.stop()); players = []; clear(body);
     $$("button", tabs).forEach(b => b.classList.toggle("on", +b.dataset.c === ch));
     const voc = FI_VOC.filter(v => v.ch === ch), lis = FI_LISTEN.filter(x => x.ch === ch), pho = ch >= 1 ? FI_PHO.filter(p => p.n === ch) : [];
+    const w = fiWeb(ch), web = h("div.stack"), part = h("div");
     body.append(h("div.card.tint", h("div.row.sp", h("div", h("b", "Chapitre " + chName(ch)), ch === cur ? h("span.pill", { style: { marginLeft: "8px" } }, "this week") : null),
-      h("a.btn", { href: FI_URL, target: "_blank", rel: "noopener" }, "Open on the FI site ↗")), h("p.small.muted", "Videos (En contexte), grammar with Tex and exercise sheets live on the FI site. Here you have the word lists and recordings, offline.")));
+      h("a.btn", { href: `https://www.laits.utexas.edu/fi/toc/${String(ch).padStart(2, "0")}/`, target: "_blank", rel: "noopener" }, "Chapter on the FI site ↗"))), web);
+    // videos, Tex grammar and the quiz, one at a time
+    const parts = [["Videos", () => h("div.stack", [["En contexte", [w.intro, ...w.voc].filter(Boolean), w.pdf["videos-voc"]], ["Interviews: les Français à Austin", w.intfr, w.pdf["videos-int-fr"]], ["Interviews: étudiants à UT Austin", w.intusa, w.pdf["videos-int-usa"]]]
+        .filter(([, l]) => l.length).map(([t, l, pdf]) => h("div.card", h("h3", t), videoPicker(l), pdf ? h("p.small.muted", h("a", { href: pdf, target: "_blank", rel: "noopener" }, "Transcript (PDF) ↗")) : null)))],
+      ["Grammar with Tex", () => gramPicker(w.gram)],
+      w.quiz ? ["Testez-vous!", () => framePane(w.quiz, "Testez-vous", { tall: true })] : null,
+      w.song.length || w.act.length ? ["Song & web activity", () => h("div.stack", [...w.song, ...w.act].map(x => h("div.card", h("h3", x.t), framePane(x.u, x.t))))] : null].filter(Boolean);
+    const ptabs = h("div.vlist");
+    const showPart = i => { clear(part).append(parts[i][1]()); $$("button", ptabs).forEach((b, j) => b.classList.toggle("on", i === j)); };
+    parts.forEach(([t], i) => ptabs.append(h("button.chip", { onclick: () => showPart(i) }, t)));
+    web.append(ptabs, part); showPart(0);
+    body.append(h("h3", { style: { marginTop: "18px" } }, "Recordings (offline)"));
     if (pho.length) pho.forEach(p => body.append(h("details.card", { style: { marginTop: "12px" } }, h("summary", h("b", "Pronunciation lesson: " + p.title)), h("p.small.muted", { style: { whiteSpace: "pre-line" } }, p.intro),
       p.items.map(it => { const pl = it.u ? audioPlayer(fiAudio(it.u)) : null; if (pl) players.push(pl); return h("div.ex-item", h("div", { style: { whiteSpace: "pre-line" } }, it.t), pl ? pl.el : null); }))));
     if (lis.length) body.append(h("h3", { style: { marginTop: "18px" } }, "Listening exercises"), lis.map(x => { const p = audioPlayer(fiAudio(x.u)); players.push(p); return h("div.card.flat", { style: { marginBottom: "8px" } }, h("b", x.t), p.el); }));
