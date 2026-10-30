@@ -1,0 +1,3 @@
+Enregistrements personnels des livres (dépôt privé).
+assimil/ : une leçon par fichier (001.m4a = leçon 1).
+comm/, gram/, voc/ : numéro de piste du CD sur deux chiffres (04.mp3 = piste 4).
