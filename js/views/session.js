@@ -67,11 +67,8 @@ STEPS["listen-fr"] = ctx => {
 STEPS["fi-context"] = ctx => {
   const f = fiForDay(ctx.n), kids = []; if (ctx.step.all) f.items = fiItems(f.ch);
   const players = [];
-  const w = fiWeb(f.ch), vids = daySlice(fiVideos(w), (ctx.n - 1) % 7, ctx.step.all);
-  kids.push(h("p.instr", `Week ${weekOf(ctx.n)} uses Français interactif ${f.week.fiName ? "chapitre " + f.week.fiName : "chapitre " + f.ch}.`),
-    h("div.card", h("h3", "En contexte video" + (vids.length > 1 ? "s" : "")), h("p.small.muted", "Watch each one once without stopping. Then again with French subtitles (CC) if you like."), videoPicker(vids),
-      w.pdf["videos-voc"] ? h("p.small.muted", "Transcripts: ", h("a", { href: w.pdf["videos-voc"], target: "_blank", rel: "noopener" }, "vocabulaire en contexte (PDF) ↗")) : null));
-  if (!f.items.length) kids.push(h("p.muted.small", "No word lists for this day."));
+  kids.push(h("p.instr", `Week ${weekOf(ctx.n)} uses Français interactif ${f.week.fiName ? "chapitre " + f.week.fiName : "chapitre " + f.ch}: listen to the word list, say each item aloud, star the ones you want as cards.`));
+  if (!f.items.length) kids.push(h("p.muted", "No word lists left for this day."));
   f.items.forEach(it => {
     if (it.t === "voc") {
       const v = it.ref, p = v.audio ? audioPlayer(fiAudio(v.audio)) : null; if (p) players.push(p);
@@ -94,11 +91,9 @@ STEPS.shadow = ctx => {
     lia, p.gaps.length < 2 ? h("p.small.muted", "(No clear pauses were detected in this recording; it plays normally.)") : null, p.el, dialogueView(ctx.L, { fr: true, en: false })), destroy: () => { p.stop(); document.removeEventListener("keydown", space); } };
 };
 STEPS["fi-gram"] = ctx => {
-  const wk = weekInfo(weekOf(ctx.n)), w = fiWeb(wk.fi), rev = isReviewDay(ctx.n), g = daySlice(w.gram, (ctx.n - 1) % 7, rev);
-  return h("div.stack", h("p.instr", "Grammar with Tex (", h("i", "la grammaire de Tex"), "), chapter ", wk.fiName || wk.fi, ". Assimil this week: ", h("b", wk.grammar), "."),
-    h("p.small.muted", "Read the page and do its short exercises. Don’t aim to master it today; meet it. Then say three example sentences aloud."),
-    gramPicker(g.length ? g : w.gram.slice(0, 1)),
-    rev && w.quiz ? h("div.card", h("h3", "Testez-vous! Chapitre " + String(wk.fi).padStart(2, "0")), h("p.small.muted", "The chapter’s self-check quiz. Do the topics you met this week."), framePane(w.quiz, "Testez-vous", { tall: true })) : null);
+  const wk = weekInfo(weekOf(ctx.n)), all = texFor(wk.fi), g = daySlice(all, (ctx.n - 1) % 7, isReviewDay(ctx.n)), t = texPicker(g);
+  return { el: h("div.stack", h("p.instr", "Grammar with Tex, chapter ", wk.fiName || wk.fi, ". Assimil this week: ", h("b", wk.grammar), "."),
+    h("ol.instr", h("li", "Read the short explanation."), h("li", "Play the Tex dialogue and read along; play it again and say each line after it."), h("li", "Star one or two lines you want as cards.")), t.el), destroy: t.stop };
 };
 STEPS.cards = ctx => {
   const spec = { n: Math.min(ctx.n, NL), noNew: !!ctx.step.backlog, newLimit: ctx.step.lite ? 5 : undefined, maxReviews: ctx.step.backlog ? 200 : 60 };
