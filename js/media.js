@@ -35,7 +35,8 @@ function beep(kind = "ok") {
 }
 
 // ───────────── lesson audio paths ─────────────
-const lessonAudio = n => `assimil audio/L${String(n).padStart(3, "0")}-LESSON.mp3`.split("/").map(encodeURIComponent).join("/");
+const HOSTED = !/^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+const lessonAudio = n => HOSTED ? `assimil/${String(n).padStart(3, "0")}.m4a` : `assimil audio/L${String(n).padStart(3, "0")}-LESSON.mp3`.split("/").map(encodeURIComponent).join("/");
 const fiAudio = u => u.split("/").map(encodeURIComponent).join("/");
 
 // ───────────── audio player ─────────────
